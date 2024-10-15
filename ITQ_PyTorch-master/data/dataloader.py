@@ -70,9 +70,9 @@ def load_data_gist(root):
     # Load data
     mat_data = sio.loadmat(root)
     query_data = mat_data['testdata']
-    query_targets = mat_data['testgnd'].astype(np.int)
+    query_targets = mat_data['testgnd'].astype(int)
     retrieval_data = mat_data['traindata']
-    retrieval_targets = mat_data['traingnd'].astype(np.int)
+    retrieval_targets = mat_data['traingnd'].astype(int)
 
     # One-hot
     query_targets = encode_onehot(query_targets)
