@@ -2,7 +2,7 @@
 [Original repository](https://github.com/Horizon2333/imagenet-autoencoder?tab=readme-ov-file#install)
 
 # Setup
-In "_/imagenet-autoencoder_" run to automatically setup project:
+Run to automatically setup project:
 ```bash
 pip install -e .
 ```
@@ -12,5 +12,8 @@ pip install -e .
 
 # Running the encoder
 ```bash
-python imagenet-autoencoder/tools/encode.py --arch vgg16 --resume imagenet-autoencoder/results/imagenet-vgg16.pth --img_path imagenet-autoencoder/figs/reconstruction.jpg
+python encode.py <image_path>
+
+# Example
+python encode.py reconstruction.jpg
 ```

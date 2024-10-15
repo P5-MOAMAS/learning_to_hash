@@ -1,7 +1,0 @@
-torch
-Pillow
-loguru
-numpy
-argparse
-matplotlib
-torchvision

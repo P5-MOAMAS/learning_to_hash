@@ -11,11 +11,7 @@ dynamic = ["version"]
 description = "Autoencoder by Horizon2333"
 
 dependencies = [
-    "torch",
     "Pillow",
-    "loguru",
-    "numpy",
-    "argparse",
-    "matplotlib",
+    "torch",
     "torchvision"
 ]
