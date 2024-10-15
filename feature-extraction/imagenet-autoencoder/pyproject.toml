@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["figs", "models", "tools"]
+
+[project]
+name = "autoencoder"
+dynamic = ["version"]
+description = "Autoencoder by Horizon2333"
+
+dependencies = [
+    "torch",
+    "Pillow",
+    "loguru",
+    "numpy",
+    "argparse",
+    "matplotlib",
+    "torchvision"
+]
