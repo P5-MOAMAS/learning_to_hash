@@ -9,18 +9,18 @@ from PIL import Image
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def load_dict(resume_path, model):
-    if os.path.isfile(resume_path):
+def load_dict(path, model):
+    if os.path.isfile(path):
         if device.type == 'cuda' :
-            checkpoint = torch.load(resume_path)
+            checkpoint = torch.load(path)
         else:
-            checkpoint = torch.load(resume_path, map_location=torch.device('cpu'))
+            checkpoint = torch.load(path, map_location=torch.device('cpu'))
         model_dict = model.state_dict()
         model_dict.update(checkpoint['state_dict'])
         model.load_state_dict(model_dict)
         del checkpoint
     else:
-        sys.exit("No checkpoint found at '{}'".format(resume_path))
+        sys.exit("No model found on path: {}", path)
     return model
 
 
