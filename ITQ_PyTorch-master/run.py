@@ -6,7 +6,7 @@ import os
 import itq
 
 from loguru import logger
-from data.dataloader import load_data
+from data.dataloader import load_feature
 
 
 def run():
@@ -21,7 +21,7 @@ def run():
     np.random.seed(args.seed)
 
     # Load dataset
-    train_data, _, query_data, query_targets, retrieval_data, retrieval_targets = load_data(args.dataset, args.root)
+    train_data, _, query_data, query_targets, retrieval_data, retrieval_targets = load_feature(args.dataset, args.root)
 
     # Training
     for code_length in args.code_length:
@@ -63,7 +63,7 @@ def load_config():
     parser.add_argument('--topk', default=-1, type=int,
                         help='Calculate map of top k.(default: ALL)')
     parser.add_argument('--gpu', default=None, type=int,
-                        help='Using gpu.(default: False)')
+                        help='Using gpu.(default: GPU 0)')
     parser.add_argument('--seed', default=3367, type=int,
                         help='Random seed.(default: 3367)')
 
