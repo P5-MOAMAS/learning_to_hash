@@ -85,7 +85,10 @@ def adjust_learning_rate_cosine(optimizer, epoch, args):
 
 def load_dict(resume_path, model):
     if os.path.isfile(resume_path):
-        checkpoint = torch.load(resume_path)
+        if torch.cuda.is_available():
+            checkpoint = torch.load(resume_path)
+        else:
+            checkpoint = torch.load(resume_path, map_location=torch.device('cpu'))
         model_dict = model.state_dict()
         model_dict.update(checkpoint['state_dict'])
         model.load_state_dict(model_dict)

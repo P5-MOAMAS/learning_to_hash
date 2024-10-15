@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.nn.parallel as parallel
 
@@ -25,6 +26,7 @@ def BuildAutoEncoder(args):
                     )   
     
     else:
-        model = nn.DataParallel(model).cuda()
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = nn.DataParallel(model).to(device)
 
     return model

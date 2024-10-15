@@ -15,6 +15,7 @@ import models.builer as builder
 
 import os
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def get_args():
@@ -63,7 +64,7 @@ def main(args):
 
     img = Image.open(args.img_path).convert("RGB")
 
-    img = trans(img).unsqueeze(0).cuda()
+    img = trans(img).unsqueeze(0).to(device)
 
     model.eval()
 
