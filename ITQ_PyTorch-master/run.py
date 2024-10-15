@@ -56,7 +56,7 @@ def load_config():
                         help='Dataset name.')
     parser.add_argument('--root',
                         help='Path of dataset')
-    parser.add_argument('--code-length', default='8,16,24,32,48,64,96,128', type=str,
+    parser.add_argument('--binary-hashcode-length', default='8,16,24,32,48,64,96,128', type=str,
                         help='Binary hash code length.(default: 8,16,24,32,48,64,96,128)')
     parser.add_argument('--max-iter', default=3, type=int,
                         help='Number of iterations.(default: 3)')
