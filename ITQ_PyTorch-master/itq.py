@@ -47,8 +47,8 @@ def train(
     for i in range(max_iter):
         V_tilde = V @ R
         B = V_tilde.sign()
-        [U, _, VT] = torch.svd(B.t() @ V)
-        R = (VT.t() @ U.t())
+        [U, _, W] = torch.svd(B.t() @ V)
+        R = (W @ U.t())
 
     # Evaluate
     # Generate query code and retrieval code
