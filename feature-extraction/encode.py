@@ -70,11 +70,14 @@ def encode_dataset(device: str, dataset_name: str):
         data_len = len(data)
         print("Starting encoding for " + str(data_len) + " images")
 
+        model.eval()
         for img in progressbar(data):
             img = img.to(device)
-            model.eval()
             code = encode(model, img)
             encoded_images.append(code)
+
+        # Delete the dataset as soon as the images have been encoded! Saves memory.
+        del data
 
         print("Finished encoding for batch " + str(batch) + " of " + dataset_name)
 
