@@ -52,8 +52,8 @@ def load_config():
         args(argparse.ArgumentParser): Configuration.
     """
     parser = argparse.ArgumentParser(description='ITQ_PyTorch')
-    parser.add_argument('--dataset',
-                        help='Dataset name.')
+    parser.add_argument('--feature-set',
+                        help='feature set name.')
     parser.add_argument('--root',
                         help='Path of dataset')
     parser.add_argument('--binary-hashcode-length', default='8,16,24,32,48,64,96,128', type=str,
