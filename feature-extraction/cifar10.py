@@ -1,5 +1,7 @@
+from PIL import Image
 import pickle
 import sys
+from torchvision.transforms import transforms
 
 """
 Loaded in this way, each of the batch files contains a dictionary with the following elements:
@@ -9,14 +11,9 @@ Loaded in this way, each of the batch files contains a dictionary with the follo
 
 The dataset contains another file, called batches.meta. It too contains a Python dictionary object. It has the following entries:
     label_names -- a 10-element list which gives meaningful names to the numeric labels in the labels array described above. For example, label_names[0] == "airplane", label_names[1] == "automobile", etc.
+
+The following function loads each image in the cifar10 dataset and transforms the image to correct size (224, 224) RGB image.
 """
-
-def unpickle(file):
-    with open(file, 'rb') as fo:
-        dict = pickle.load(fo, encoding='bytes')
-    return dict
-
-
 def load_cifar10(batch_number):
     if batch_number >= 6:
         print("Batch number does not exist!")
@@ -28,5 +25,12 @@ def load_cifar10(batch_number):
     with open("cifar-10-batches-py/data_batch_" + str(batch_number), 'rb') as fo:
         dict = pickle.load(fo, encoding='bytes')
 
-    return dict[b'data']
+    trans = transforms.Compose([
+                    transforms.Resize(256),
+                    transforms.CenterCrop(224),
+                    transforms.ToTensor()
+                  ])
+    images = [Image.frombytes("RGB", (32, 32), d) for d in dict[b'data']]
+    images = [trans(i).unsqueeze(0) for i in images]
 
+    return dict[b'data']
