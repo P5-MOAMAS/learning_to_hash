@@ -59,20 +59,16 @@ def get_model(device: str):
 
 # @TODO Ensure multithreading
 def encode_dataset(device: str, dataset_name: str):
-    model = get_model(device)
-    load_dict("feature-extraction/imagenet-vgg16.pth", model, device)
-
+    model = load_model(device)
     encoded_images = []
 
     for batch in range(1, get_dataset_batch_amount(dataset_name) + 1):
         print("Loading batch " + str(batch) + " of " + dataset_name)
         data = DynamicDataset(dataset_name, batch_number=batch)
-        data_len = len(data)
-        print("Starting encoding for " + str(data_len) + " images")
+        print("Starting encoding for " + str(len(data)) + " images")
 
         for img in progressbar(data):
             img = img.to(device)
-            model.eval()
             code = encode(model, img)
             encoded_images.append(code)
 
@@ -80,10 +76,16 @@ def encode_dataset(device: str, dataset_name: str):
 
     return encoded_images
 
-def encode_image(image_path: str, device: str):
-    # Load model
+
+def load_model(device):
     model = get_model(device)
+    model.eval()
     load_dict("feature-extraction/imagenet-vgg16.pth", model, device)
+    return model
+
+
+def encode_image(image_path: str, device: str):
+    model = load_model(device)
 
     # Transform image to match model input size
     trans = transforms.Compose([
@@ -93,13 +95,8 @@ def encode_image(image_path: str, device: str):
                   ])
     img = Image.open(image_path).convert("RGB")
     img = trans(img).unsqueeze(0).to(device)
-
-    # Run image trough model
-    model.eval()
-
     code = encode(model, img)
 
-    print(code.shape)
     return code
 
 
@@ -125,10 +122,8 @@ def main():
     if args.image_path:
         result = encode_image(args.image_path, device)
         print("Images encoded: " + str(len(result)))
-        print("Feature shape" + str(result[0].shape))
     elif args.dataset:
         result = encode_dataset(device, args.dataset)
-        print("Feature shape" + str(result.shape))
 
     return result
 
