@@ -1,3 +1,4 @@
+import gc
 import os
 import sys
 import time
@@ -61,13 +62,13 @@ def get_model(device: str):
 def encode_dataset(device: str, dataset_name: str):
     model = load_model(device)
     encoded_images = []
+    batches = get_dataset_batch_amount(dataset_name);
 
-    for batch in range(1, get_dataset_batch_amount(dataset_name) + 1):
-        print("Loading batch " + str(batch) + " of " + dataset_name)
+    for batch in range(1, batches + 1):
+        print("Loading batch " + str(batch) + "/" + str(batches) + " of " + dataset_name)
         data = DynamicDataset(dataset_name, batch_number=batch)
         print("Starting encoding for " + str(len(data)) + " images")
 
-        model.eval()
         for img in progressbar(data):
             img = img.to(device)
             code = encode(model, img)
@@ -75,6 +76,7 @@ def encode_dataset(device: str, dataset_name: str):
 
         # Delete the dataset as soon as the images have been encoded! Saves memory.
         del data
+        gc.collect()
 
         print("Finished encoding for batch " + str(batch) + " of " + dataset_name)
 
