@@ -124,14 +124,11 @@ def main():
         else:
             sys.exit("No GPU found")
 
-    result = None
     if args.image_path:
         result = encode_image(args.image_path, device)
         print("Images encoded: " + str(len(result)))
     elif args.dataset:
-        result = encode_dataset(device, args.dataset)
-
-    return result
+        encode_dataset(device, args.dataset)
 
 
 if __name__ == '__main__':
