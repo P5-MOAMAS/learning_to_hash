@@ -20,10 +20,21 @@ pip install -e .
 ## Downloading the pre-trained model
 [Download link](https://drive.google.com/file/d/1WwJiQ1kBcNCZ37F6PJ_0bIL0ZeU3_sV8/view)
 # Running the encoder
+See all flags using:
+```bash
+python feature-extraction/encode.py -h
+```
+
+## Single image
 ```bash
 python encode.py <image_path>
 
 # Example
-python encode.py reconstruction.jpg
+python feature-extraction/encode.py --image-path feature-extraction/reconstruction.jpg
+```
+
+## For datasets
+```bash
+python feature-extraction/encode.py --dataset cifar-10
 ```
 

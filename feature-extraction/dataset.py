@@ -3,6 +3,14 @@ import cifar10
 
 from torch.utils.data import Dataset
 
+def get_dataset_batch_amount(dataset_name: str):
+    match dataset_name:
+        case "cifar-10":
+            return 5
+        case _:
+            print("No dataset with given name!")
+            sys.exit(1)
+
 class DynamicDataset(Dataset):
     def __init__(self, dataset_name: str, batch_number=0):
         self.datalist = []

@@ -33,4 +33,4 @@ def load_cifar10(batch_number):
     images = [Image.frombytes("RGB", (32, 32), d) for d in dict[b'data']]
     images = [trans(i).unsqueeze(0) for i in images]
 
-    return dict[b'data']
+    return images
