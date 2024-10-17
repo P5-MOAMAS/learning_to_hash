@@ -58,8 +58,39 @@ def get_model(device: str):
     return model
 
 
+def encode_and_save(device, dataset_name: str):
+    model = load_model(device)
+    batches = get_dataset_batch_amount(dataset_name);
+
+    batch_codes = []
+
+    if not os.path.isdir("features"):
+        os.mkdir("features")
+
+    for batch in range(1, batches + 1):
+        batch_codes.clear()
+        print("Loading batch " + str(batch) + "/" + str(batches) + " of " + dataset_name)
+        data = DynamicDataset(dataset_name, batch_number=batch)
+        print("Starting encoding for " + str(len(data)) + " images")
+
+        for img in progressbar(data):
+            img = img.to(device)
+            code = encode(model, img)
+            batch_codes.append(code)
+
+        # Delete the dataset as soon as the images have been encoded! Saves memory.
+        del data
+        gc.collect()
+        name = "features/" + str(dataset_name) + "-" + str(batch) + "-features"
+        with open(name, 'ab') as f:
+            import pickle
+            pickle.dump(batch_codes, f)
+        print("Finished encoding for batch " + str(batch) + " of " + dataset_name)
+        print("Saved in '" + name + "'")
+
+
 # @TODO Ensure multithreading
-def encode_dataset(device: str, dataset_name: str):
+def encode_dataset(device, dataset_name: str):
     model = load_model(device)
     encoded_images = []
     batches = get_dataset_batch_amount(dataset_name);
@@ -90,7 +121,7 @@ def load_model(device):
     return model
 
 
-def encode_image(image_path: str, device: str):
+def encode_image(image_path: str, device):
     model = load_model(device)
 
     # Transform image to match model input size
@@ -128,7 +159,8 @@ def main():
         result = encode_image(args.image_path, device)
         print("Images encoded: " + str(len(result)))
     elif args.dataset:
-        encode_dataset(device, args.dataset)
+        encode_and_save(device, args.dataset)
+        # encode_dataset(device, args.dataset)
 
 
 if __name__ == '__main__':
