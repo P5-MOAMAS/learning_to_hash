@@ -1,140 +1,126 @@
 import gc
 import os
 import sys
-import time
 
 import argparse
+
 import torch
 from torch import nn
+
 import vgg
 from torchvision.transforms import transforms
 from PIL import Image
 
-from dataset import get_dataset_batch_amount, DynamicDataset
+from dataset import DynamicDataset
 
-# https://stackoverflow.com/questions/3160699/python-progress-bar
-def progressbar(it, prefix="", size=60, out=sys.stdout):
-    count = len(it)
-    start = time.time() # time estimate start
-    def show(j):
-        x = int(size*j/count)
-        # time estimate calculation and string
-        remaining = ((time.time() - start) / j) * (count - j)
-        mins, sec = divmod(remaining, 60) # limited to minutes
-        time_str = f"{int(mins):02}:{sec:03.1f}"
-        print(f"{prefix}[{u'█'*x}{('.'*(size-x))}] {j}/{count} Est wait {time_str}", end='\r', file=out, flush=True)
-    show(0.1) # avoid div/0
-    for i, item in enumerate(it):
-        yield item
-        show(i+1)
-    print("\n", flush=True, file=out)
+from progressbar import progressbar
 
 
-def load_dict(path: str, model: nn.Module, device: str):
-    if os.path.isfile(path):
-        if device.type == 'cuda' :
-            checkpoint = torch.load(path, weights_only=False)
+class Encoder:
+    def __init__(self, device):
+        self.device = device
+        self.model = self.load_model()
+
+
+    def encode_batch_images(self, batch: list, max_images: int = -1):
+        if max_images > 0:
+            batch = batch[:max_images]
+
+        print("Starting encoding for " + str(len(batch)) + " images")
+
+        for img in progressbar(batch):
+            img = img.to(self.device)
+            code = self.encode(img)
+            yield code
+
+
+    def encode_dataset(self, dataset: DynamicDataset):
+        for i in range(dataset.get_batch_number(), dataset.get_max_batch() + 1):
+            batch = dataset[i]
+            print("Loaded batch " + str(dataset.get_batch_number()) + "/" + str(dataset.get_max_batch()) + " of " + dataset.get_name())
+            codes = self.encode_batch(batch)
+            print("Finished encoding for batch " + str(dataset.get_batch_number()) + " of " + dataset.get_name())
+            yield codes
+
+            # Delete the dataset as soon as the images have been encoded! Saves memory.
+            del batch
+            gc.collect()
+
+
+    def encode_batches(self, dataset_name: str):
+        dataset = DynamicDataset(dataset_name)
+        yield self.encode_dataset(dataset)
+
+
+    def encode_batch(self, dataset: list):
+        codes = None
+        for code in self.encode_batch_images(dataset):
+            if codes is not None:
+                codes = torch.cat((codes, code), 0)
+            else:
+                codes = code
+
+        return codes
+
+
+    def encode_batches_and_save(self, dataset_name: str):
+        dataset = DynamicDataset(dataset_name)
+
+        for codes in self.encode_dataset(dataset):
+            os.makedirs("features", exist_ok=True)
+            file = "features/" + str(dataset_name) + "-" + str(dataset.get_batch_number()) + "-features"
+            print("Saving features to " + file)
+            torch.save(codes, file)
+            print("Features successfully saved!\n")
+
+            del codes
+
+
+    def load_model(self):
+        model = vgg.VGGAutoEncoder(vgg.get_configs())
+        model = nn.DataParallel(model).to(self.device)
+
+        self.load_dict("feature-extraction/imagenet-vgg16.pth", model)
+        model.eval()
+
+        return model
+
+
+    def load_dict(self, path: str, model: nn.Module):
+        if os.path.isfile(path):
+            if self.device.type == 'cuda':
+                checkpoint = torch.load(path, weights_only=False)
+            else:
+                checkpoint = torch.load(path, map_location=torch.device('cpu'), weights_only=False)
+            model_dict = model.state_dict()
+            model_dict.update(checkpoint['state_dict'])
+            model.load_state_dict(model_dict)
+            del checkpoint
         else:
-            checkpoint = torch.load(path, map_location=torch.device('cpu'), weights_only=False)
-        model_dict = model.state_dict()
-        model_dict.update(checkpoint['state_dict'])
-        model.load_state_dict(model_dict)
-        del checkpoint
-    else:
-        sys.exit("No model found on path: " + path)
-    return model
+            sys.exit("No model found on path: " + path)
+        return model
 
 
-def encode(model: nn.Module, img):
-    with torch.no_grad():
-        code = model.module.encoder(img).cpu().numpy()
-    return code
+    def encode(self, img):
+        with torch.no_grad():
+            code = self.model.module.encoder(img).cpu()
+        return code
 
 
-def get_model(device: str):
-    model = vgg.VGGAutoEncoder(vgg.get_configs())
-    model = nn.DataParallel(model).to(device)
+    def encode_image(self, image_path: str):
+        model = self.load_model(self.device)
 
-    return model
+        # Transform image to match model input size
+        trans = transforms.Compose([
+                        transforms.Resize(256),
+                        transforms.CenterCrop(224),
+                        transforms.ToTensor()
+                      ])
+        img = Image.open(image_path).convert("RGB")
+        img = trans(img).unsqueeze(0).to(self.device)
+        code = self.encode(model, img)
 
-
-def encode_and_save(device, dataset_name: str):
-    model = load_model(device)
-    batches = get_dataset_batch_amount(dataset_name);
-
-    batch_codes = []
-
-    if not os.path.isdir("features"):
-        os.mkdir("features")
-
-    for batch in range(1, batches + 1):
-        batch_codes.clear()
-        print("Loading batch " + str(batch) + "/" + str(batches) + " of " + dataset_name)
-        data = DynamicDataset(dataset_name, batch_number=batch)
-        print("Starting encoding for " + str(len(data)) + " images")
-
-        for img in progressbar(data):
-            img = img.to(device)
-            code = encode(model, img)
-            batch_codes.append(code)
-
-        # Delete the dataset as soon as the images have been encoded! Saves memory.
-        del data
-        gc.collect()
-        name = "features/" + str(dataset_name) + "-" + str(batch) + "-features"
-        with open(name, 'ab') as f:
-            import pickle
-            pickle.dump(batch_codes, f)
-        print("Finished encoding for batch " + str(batch) + " of " + dataset_name)
-        print("Saved in '" + name + "'")
-
-
-# @TODO Ensure multithreading
-def encode_dataset(device, dataset_name: str):
-    model = load_model(device)
-    encoded_images = []
-    batches = get_dataset_batch_amount(dataset_name);
-
-    for batch in range(1, batches + 1):
-        print("Loading batch " + str(batch) + "/" + str(batches) + " of " + dataset_name)
-        data = DynamicDataset(dataset_name, batch_number=batch)
-        print("Starting encoding for " + str(len(data)) + " images")
-
-        for img in progressbar(data):
-            img = img.to(device)
-            code = encode(model, img)
-            encoded_images.append(code)
-
-        # Delete the dataset as soon as the images have been encoded! Saves memory.
-        del data
-        gc.collect()
-
-        print("Finished encoding for batch " + str(batch) + " of " + dataset_name)
-
-    return encoded_images
-
-
-def load_model(device):
-    model = get_model(device)
-    model.eval()
-    load_dict("feature-extraction/imagenet-vgg16.pth", model, device)
-    return model
-
-
-def encode_image(image_path: str, device):
-    model = load_model(device)
-
-    # Transform image to match model input size
-    trans = transforms.Compose([
-                    transforms.Resize(256),
-                    transforms.CenterCrop(224),
-                    transforms.ToTensor()
-                  ])
-    img = Image.open(image_path).convert("RGB")
-    img = trans(img).unsqueeze(0).to(device)
-    code = encode(model, img)
-
-    return code
+        return code
 
 
 def main():
@@ -145,22 +131,23 @@ def main():
     parser.add_argument("-fg", "--force-gpu", action="store_true", help="force gpu")
     args = parser.parse_args()
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if args.force_cpu:
-        device = torch.device("cpu")
+        args.device = torch.device("cpu")
     elif args.force_gpu:
         if torch.cuda.is_available():
-            device = torch.device("cuda")
+            args.device = torch.device("cuda")
         else:
             sys.exit("No GPU found")
 
+    encoder = Encoder(args.device)
+
     if args.image_path:
-        result = encode_image(args.image_path, device)
+        result = encoder.encode_image(args.image_path)
         print("Images encoded: " + str(len(result)))
     elif args.dataset:
-        encode_and_save(device, args.dataset)
-        # encode_dataset(device, args.dataset)
+        encoder.encode_batches_and_save(args.dataset)
 
 
 if __name__ == '__main__':
