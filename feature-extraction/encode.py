@@ -3,7 +3,6 @@ import os
 import sys
 
 import argparse
-import time
 
 import torch
 from torch import nn
@@ -63,7 +62,6 @@ class Encoder:
 
     def encode_batches_and_save(self, dataset_name: str):
         dataset = DynamicDataset(dataset_name)
-        start = time.time()
         for codes in self.encode_dataset(dataset):
             os.makedirs("features", exist_ok=True)
             file = "features/" + str(dataset_name) + "-" + str(dataset.get_batch_number()) + "-features"
@@ -72,9 +70,6 @@ class Encoder:
             print("Features successfully saved!\n")
 
             del codes
-
-        end = time.time()
-        print(end - start)
 
 
     def load_model(self):
