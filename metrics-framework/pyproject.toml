@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+
+[tool.setuptools]
+py-modules = []
+
+
+[project]
+name = "metric-calculator"
+dynamic = ["version"]
+description = "Framework for metrics calculations"
+
+
+dependencies = [
+    "torch",
+]
