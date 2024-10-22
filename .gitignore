@@ -3,3 +3,4 @@
 /feature-extraction/autoencoder.egg-info/
 features/*
 cifar-10-batches-py/
+.idea
