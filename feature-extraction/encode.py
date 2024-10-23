@@ -39,7 +39,7 @@ class Encoder:
             batch = dataset[i]
             print("Loaded batch " + str(dataset.get_batch_number()) + "/" + str(dataset.get_max_batch()) + " of " + dataset.get_name())
             codes = self.encode_batch(batch)
-            print("Finished encoding for batch " + str(dataset.get_batch_number()) + " of " + dataset.get_name())
+            print("Finished encoding for batch " + str(dataset.get_batch_number()) + " of " + dataset.get_name() + " structure: " + str(codes.shape))
             yield codes
 
             # Delete the dataset as soon as the images have been encoded! Saves memory.
@@ -55,7 +55,7 @@ class Encoder:
     def encode_batch(self, dataset: list):
         codes = []
         for code in self.encode_batch_images(dataset):
-            codes.append(code)
+            codes.append(code.flatten())
 
         return torch.stack(codes, dim=0)
 
