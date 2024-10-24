@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+
+[tool.setuptools]
+py-modules = []
+
+[project]
+name = "labelextractor"
+dynamic = ["version"]
+description = "Label extraction"
+
+dependencies = ["numpy", "scikit-learn"]
