@@ -1,0 +1,6 @@
+/feature-extraction/imagenet-vgg16.pth
+/feature-extraction/venv/
+/feature-extraction/autoencoder.egg-info/
+features/*
+cifar-10-batches-py/
+.idea
