@@ -1,4 +1,4 @@
-from model import ITQ
+from itq import ITQ, ITQ_CCA
 from dataset import load_mnist_gist
 from evaluation import mean_average_precision, precision_recall
 
