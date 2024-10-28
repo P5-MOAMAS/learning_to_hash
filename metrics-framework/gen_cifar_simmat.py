@@ -61,14 +61,5 @@ def unpickle(file):
 
 if __name__ == "__main__":
     mat1 = CifarSimilarityMatrix.create_matrix()
-
-    t1 = mat1.get_related(0)
-    mat1.save()
-
-    mat2 = CifarSimilarityMatrix.load()
-    t2 = mat2.get_related(0)
-
-    for x, y in zip(t1, t2):
-        if x != y:
-            print("DEBUG")
-            sys.exit(1)
+    
+    print(mat1.get_related(int(sys.argv[1])))
