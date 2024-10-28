@@ -4,6 +4,8 @@
 
 /metrics-framework/sim_matrix
 
+__pycache__
+
 features/*
 cifar-10-batches-py/
 .idea
