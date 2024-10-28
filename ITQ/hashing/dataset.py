@@ -4,10 +4,10 @@ import numpy as np
 
 def load_cifar10_deep(root):
     all_features = []
-    all_labels = []
     root = os.path.normpath(root)
 
-    class_labels = [digit for digit in range(10) for _ in range(500)]  # 500 per class for 10 classes
+    # Initialize the labels for each class (0-9) with 5000 instances each
+    class_labels = np.array([digit for digit in range(10) for _ in range(5000)])
 
     for i in range(1, 6):
         batch_filename = f'cifar-10-{i}-features'
@@ -23,30 +23,37 @@ def load_cifar10_deep(root):
 
         if isinstance(features, torch.Tensor):
             all_features.append(features)
-            start_index = (i - 1) * 1000
-            end_index = i * 1000
-            all_labels.extend(class_labels[start_index:end_index])
         else:
             print(f"Warning: Expected a tensor but got {type(features)} from {batch_filename}")
 
-    if not all_features or not all_labels:
-        raise ValueError("No features or labels collected.")
+    # Concatenate all features into a single tensor
+    if not all_features:
+        raise ValueError("No features collected.")
 
-    features = torch.cat(all_features, dim=0).numpy()
-    labels = np.array(all_labels)
+    features = torch.cat(all_features, dim=0).numpy()  # Shape should be (50000, 25088)
 
+    # Create labels corresponding to the collected features
+    all_labels = np.repeat(np.arange(10), 5000)  # 10 classes with 5000 samples each
+
+    # Check the shapes
+    assert features.shape == (50000, 25088), f"Expected shape (50000, 25088) but got {features.shape}"
+    assert len(all_labels) == 50000, f"Expected 50000 labels but got {len(all_labels)}"
+
+    # Indices for query, train, and database sets
     query_index, train_index, database_index = [], [], []
 
     for digit in range(10):
-        digit_idx = np.flatnonzero(labels == digit)
+        digit_idx = np.flatnonzero(all_labels == digit)
         digit_idx = np.random.permutation(digit_idx)
-        query_index.extend(digit_idx[:100])
-        train_index.extend(digit_idx[100:700])
-        database_index.extend(digit_idx[100:])
 
-    query_data = (features[query_index], labels[query_index])
-    train_data = (features[train_index], labels[train_index])
-    database_data = (features[database_index], labels[database_index])
+        # Adjust these numbers according to the desired split
+        query_index.extend(digit_idx[:100])  # 100 per class for the query
+        database_index.extend(digit_idx[100:])  # 4900 per class for database
+
+    # Extract query, train, and database data
+    query_data = (features[query_index], all_labels[query_index])
+    train_data = (features[train_index], all_labels[train_index])
+    database_data = (features[database_index], all_labels[database_index])
 
     return query_data, train_data, database_data
 

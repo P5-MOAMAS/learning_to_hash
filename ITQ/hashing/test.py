@@ -4,15 +4,13 @@ from evaluation import mean_average_precision, precision_recall
 
 # Load CIFAR-10 features
 root = './deep_features/cifar10_features/'
-query_data, train_data, database_data = load_cifar10_deep(root)
+query_data, database_data = load_cifar10_deep(root)
 
 query, query_label = query_data
-train, train_label = train_data  # Get labels if needed
 database, database_label = database_data
 
 # Check data shapes
 print(f'Query shape: {query.shape}, Labels shape: {query_label.shape}')
-print(f'Train shape: {train.shape}, Labels shape: {train_label.shape}')
 print(f'Database shape: {database.shape}, Labels shape: {database_label.shape}')
 
 # Initialize ITQ
