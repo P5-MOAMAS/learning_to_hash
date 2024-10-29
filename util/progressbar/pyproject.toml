@@ -6,13 +6,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 py-modules = []
 
-
 [project]
-name = "metric-calculator"
+name = "progressbar"
 dynamic = ["version"]
-description = "Framework for metrics calculations"
+description = "Progressbar"
 
-
-dependencies = [
-    "torch",
-]
+dependencies = []
