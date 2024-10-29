@@ -15,5 +15,8 @@ dependencies = [
     "numpy",
     "scikit-learn",
     "progressbar @ file:///root/learning_to_hash/util/progressbar",
-    "torch"
+    "torch",
+    "Pillow",
+    "torchvision",
+    "argparse"
 ]
