@@ -3,4 +3,6 @@
 /feature-extraction/autoencoder.egg-info/
 features/*
 cifar-10-batches-py/
+spectral-hashing/__pycache__
+lsh
 .idea
