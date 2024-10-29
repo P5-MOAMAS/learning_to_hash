@@ -1,18 +1,20 @@
+import gc
 import os
+
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torchvision
-from torchvision import transforms, models
-from torch.utils.data import DataLoader, Dataset, Subset
-from sklearn.neighbors import NearestNeighbors
+from PIL import Image
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import eigsh
-from sklearn.decomposition import PCA
+from sklearn.decomposition import IncrementalPCA
 from sklearn.linear_model import Ridge
-import gc
-from PIL import Image
-import matplotlib.pyplot as plt
+from sklearn.neighbors import NearestNeighbors
+from torch.utils.data import DataLoader, Dataset, Subset
 from tqdm import tqdm
+from torchvision import transforms, models
+from torchvision.models import VGG16_Weights
 
 
 class SpectralHashing:
@@ -41,6 +43,8 @@ class SpectralHashing:
         self.batch_size = batch_size
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.n_components = n_components
+        self.labels = None
+
         if self.n_components is not None and self.n_components < self.num_bits:
             raise ValueError(
                 "Number of PCA components must be greater than or equal to number of hash bits."
@@ -80,19 +84,18 @@ class SpectralHashing:
 
     def _load_model(self):
         # Load a pre-trained ResNet18 model
-        self.resnet = models.resnet18(pretrained=True)
-        self.resnet = self.resnet.to(self.device)
-        self.resnet.eval()  # Set to evaluation mode
+        self.vgg = models.vgg16(weights=VGG16_Weights.DEFAULT)
+        self.vgg = self.vgg.to(self.device)
+        self.vgg.eval()  # Set to evaluation mode
 
         # Remove the final fully connected layer to get features
-        self.feature_extractor = torch.nn.Sequential(*list(self.resnet.children())[:-1])
+        self.feature_extractor = torch.nn.Sequential(*list(self.vgg.features))
 
     def _load_and_preprocess_images(self, data_source):
         print("Loading and preprocessing images...")
         if isinstance(data_source, DataLoader):
             dataloader = data_source
         elif isinstance(data_source, str):
-            # Load images from the folder
             image_paths = [
                 os.path.join(data_source, fname)
                 for fname in os.listdir(data_source)
@@ -106,55 +109,66 @@ class SpectralHashing:
             )
 
         features_list = []
-        self.image_tensors = []  
-
-        ############
-        ############ CHANGE THIS WHEN DECIDING HOW MANY IMAGES TO USE FOR RAM
-        ############
+        self.image_tensors = []
+        labels_list = []
 
         batch_count = 0
+        max_images = 10000  # Adjust this based on your RAM capacity
         with torch.no_grad():
             for batch in tqdm(dataloader, total=len(dataloader)):
                 if isinstance(data_source, DataLoader):
-                    images = batch[0]  # DataLoader returns (images, labels)
+                    images, labels = batch
+                    labels = labels.cpu().numpy()
                 else:
                     images = batch
+                    labels = None
+
                 images = images.to(self.device)
                 features = self.feature_extractor(images)
-                features = features.view(features.size(0), -1)  
+                features = features.view(features.size(0), -1)
 
                 features_list.append(features.cpu().numpy())
                 self.image_tensors.append(images.cpu())
+                if labels is not None:
+                    labels_list.append(labels)
 
                 batch_count += images.size(0)
-                if batch_count >= 5000:  # CHANGE HERE 
+                if batch_count >= max_images:
                     break
 
-        # Concatenate all features and images
-        self.features = np.vstack(features_list)[:5000] # CHANGE HERE 
-        self.image_tensors = torch.cat(self.image_tensors)[:5000] # CHANGE HERE 
+        self.features = np.vstack(features_list)[:max_images]
+        self.image_tensors = torch.cat(self.image_tensors)[:max_images]
+        if labels_list:
+            self.labels = np.concatenate(labels_list)[:max_images]
         print(f"Extracted features for {self.features.shape[0]} images.")
 
     def _perform_pca(self):
         print("Reducing dimensionality with PCA...")
         if self.n_components is None:
-            # Analyze the explained variance ratio to select the number of components
-            pca_full = PCA()
-            pca_full.fit(self.features)
-            cumulative_variance = np.cumsum(pca_full.explained_variance_ratio_)
-            self.n_components = np.searchsorted(cumulative_variance, 0.95) + 1
-            print(
-                f"Number of PCA components to retain 95% variance: {self.n_components}"
-            )
+            self.n_components = max(self.num_bits, 100)
 
         if self.n_components < self.num_bits:
             raise ValueError(
                 "Number of PCA components must be greater than or equal to number of hash bits."
             )
 
-        # Now perform PCA with the selected number of components and whitening
-        self.pca = PCA(n_components=self.n_components, whiten=True)
-        self.features_pca = self.pca.fit_transform(self.features)
+        self.pca = IncrementalPCA(n_components=self.n_components, whiten=True)
+
+        batch_size = 1000
+        n_samples = self.features.shape[0]
+
+        for i in tqdm(range(0, n_samples, batch_size), desc="Fitting Incremental PCA"):
+            batch_features = self.features[i : i + batch_size]
+            self.pca.partial_fit(batch_features)
+
+        features_pca_list = []
+        for i in tqdm(range(0, n_samples, batch_size), desc="Transforming features"):
+            batch_features = self.features[i : i + batch_size]
+            batch_features_pca = self.pca.transform(batch_features)
+            features_pca_list.append(batch_features_pca)
+
+        self.features_pca = np.vstack(features_pca_list)
+
         print(
             f"Reduced features to {self.n_components} dimensions using PCA with whitening."
         )
@@ -297,6 +311,44 @@ class SpectralHashing:
         plt.tight_layout()
         plt.show()
 
+    def compute_map(self, sample_size=None):
+        if self.labels is None:
+            raise ValueError("Labels are required to compute mAP")
+
+        n_samples = self.binary_codes.shape[0]
+
+        if sample_size is None or sample_size > n_samples:
+            sample_size = n_samples
+
+        indices = np.arange(n_samples)
+        query_indices = indices[:sample_size]
+
+        APs = []
+
+        for query_idx in tqdm(query_indices, desc="Computing mAP"):
+            query_code = self.binary_codes[query_idx]
+            query_label = self.labels[query_idx]
+
+            hamming_distances = np.sum(
+                np.bitwise_xor(self.binary_codes, query_code), axis=1
+            )
+
+            hamming_distances[query_idx] = np.max(hamming_distances) + 1
+
+            ranking_list = np.argsort(hamming_distances)
+            ranking_labels = self.labels[ranking_list]
+
+            relevant = (ranking_labels == query_label).astype(int)
+            cum = np.cumsum(relevant)
+            precision_at_k = cum / (np.arange(len(relevant)) + 1)
+
+            AP = np.sum(precision_at_k * relevant) / np.sum(relevant)
+            APs.append(AP)
+
+        mean_AP = np.mean(APs)
+        print(f"Mean Average Precision (mAP): {mean_AP:.4f}")
+        return mean_AP
+
 
 class ImageFolderDataset(Dataset):
     def __init__(self, image_paths, transform=None):
@@ -313,52 +365,47 @@ class ImageFolderDataset(Dataset):
         return image
 
 
-
-
 ##### TEST BELOW NEED A FROG PICTURE OR JUST USE A CIFAR IMAGE
 
 transform = transforms.Compose(
-  [
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
-    transforms.ToTensor(),
-    # Normalization parameters for ImageNet
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-  ]
+    [
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        # Normalization parameters for ImageNet
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+    ]
 )
 
 cifar10_dataset = torchvision.datasets.CIFAR10(
-  root="./data", train=True, download=True, transform=transform
+    root="./data", train=True, download=True, transform=transform
 )
 
-subset_indices = list(range(5000))
+subset_indices = list(range(10000))
 cifar10_subset = Subset(cifar10_dataset, subset_indices)
 
 batch_size = 128
 train_loader = DataLoader(cifar10_subset, batch_size=batch_size, shuffle=False)
 
 spectral_hash = SpectralHashing(
-  data_source=train_loader,
-  num_bits=64,
-  k_neighbors=10,
-  n_components=None, 
-  batch_size=batch_size,
-  device=None,  
+    data_source=train_loader,
+    num_bits=32,
+    k_neighbors=100,
+    n_components=None,
+    batch_size=batch_size,
+    device=None,
 )
 
 
-query_image_path = (
-    "frog2.jpg"  
-)
+query_image_path = "spectral-hashing\\frog2.jpg"
 if not os.path.isfile(query_image_path):
     print(f"Query image not found: {query_image_path}")
 else:
+    spectral_hash.compute_map()
     query_image = Image.open(query_image_path).convert("RGB")
 
     retrieved_images, retrieved_distances = spectral_hash.query(
         image=query_image,
         num_neighbors=10,
-        visualize=True,  
+        visualize=True,
     )
-
-   
