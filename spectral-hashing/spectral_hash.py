@@ -1,6 +1,5 @@
 import gc
 import os
-
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -18,6 +17,13 @@ from torchvision.models import VGG16_Weights
 
 
 class SpectralHashing:
+    """
+    Spectral Hashing class for generating binary hash codes using spectral hashing with
+    graph-based feature representation. This class preprocesses image data, reduces
+    dimensionality, constructs a similarity graph, and generates binary codes for fast
+    approximate nearest neighbor search.
+    """
+
     def __init__(
         self,
         data_source,
@@ -83,15 +89,23 @@ class SpectralHashing:
         gc.collect()
 
     def _load_model(self):
-        # Load a pre-trained ResNet18 model
+        """
+        Loads a pre-trained VGG16 model and prepares it as a feature extractor by removing
+        the final classifier layers.
+        """
         self.vgg = models.vgg16(weights=VGG16_Weights.DEFAULT)
         self.vgg = self.vgg.to(self.device)
         self.vgg.eval()  # Set to evaluation mode
-
-        # Remove the final fully connected layer to get features
         self.feature_extractor = torch.nn.Sequential(*list(self.vgg.features))
 
     def _load_and_preprocess_images(self, data_source):
+        """
+        Loads images from the specified data source, preprocesses them, and extracts
+        feature vectors using the feature extractor.
+
+        Parameters:
+            data_source (DataLoader or str): Source of the data, either a DataLoader or a path.
+        """
         print("Loading and preprocessing images...")
         if isinstance(data_source, DataLoader):
             dataloader = data_source
@@ -143,6 +157,10 @@ class SpectralHashing:
         print(f"Extracted features for {self.features.shape[0]} images.")
 
     def _perform_pca(self):
+        """
+        Performs dimensionality reduction on image features using Incremental PCA.
+        Reduces the feature dimensionality to the specified number of components (n_components).
+        """
         print("Reducing dimensionality with PCA...")
         if self.n_components is None:
             self.n_components = max(self.num_bits, 100)
@@ -174,6 +192,10 @@ class SpectralHashing:
         )
 
     def _build_similarity_graph(self):
+        """
+        Constructs a k-Nearest Neighbor (k-NN) graph using a Gaussian kernel for similarity.
+        The resulting graph is used as the basis for generating hash codes.
+        """
         print("Building k-NN graph...")
         k = self.k_neighbors  # Number of nearest neighbors
         nbrs = NearestNeighbors(n_neighbors=k + 1, algorithm="auto").fit(
@@ -202,7 +224,11 @@ class SpectralHashing:
         print("Constructed symmetric affinity matrix using Gaussian kernel.")
 
     def _compute_laplacian_eigenvectors(self):
-        print("Computing normalized Laplacian matrix..s.")
+        """
+        Computes the normalized Laplacian matrix and calculates its eigenvectors. These
+        eigenvectors serve as the basis for generating binary hash codes.
+        """
+        print("Computing normalized Laplacian matrix...")
         from scipy.sparse import csgraph
 
         L = csgraph.laplacian(self.W, normed=True)
@@ -221,19 +247,34 @@ class SpectralHashing:
         print(f"Generated binary codes with {num_bits} bits.")
 
     def _learn_hash_functions(self):
+        """
+        Learns hash functions using Ridge Regression to map reduced features to eigenvectors.
+        This step enables generalization to unseen data.
+        """
         print("Learning hash functions using Ridge Regression...")
         self.hash_functions = Ridge(alpha=1.0)
         self.hash_functions.fit(self.features_pca, self.eigenvectors)
         print("Learned hash functions for all bits jointly.")
 
     def _compute_hash_codes(self, features):
+        """
+        Computes binary hash codes for given features by projecting them through learned
+        hash functions.
+
+        Parameters:
+            features (numpy array): The input feature vectors.
+
+        Returns:
+            numpy array: Binary hash codes.
+        """
         projected = self.hash_functions.predict(features)
         binary_codes = (projected > 0).astype(int)
         return binary_codes
 
     def query(self, image, num_neighbors=10, visualize=False):
         """
-        Queries the dataset with a new image.
+        Queries the dataset with a new image, returning the most similar images and their
+        distances.
 
         Parameters:
             image (PIL.Image or similar): The query image (not preprocessed).
@@ -244,21 +285,15 @@ class SpectralHashing:
             retrieved_images (numpy array): Array of retrieved image tensors.
             retrieved_distances (numpy array): Hamming distances of retrieved images.
         """
-        # Preprocess the query image
         query_image_tensor = self.transform(image).unsqueeze(0).to(self.device)
 
-        # Extract features
         with torch.no_grad():
             query_feature = self.feature_extractor(query_image_tensor)
             query_feature = query_feature.view(1, -1).cpu().numpy()
 
-        # Apply PCA transformation
         query_feature_pca = self.pca.transform(query_feature)
-
-        # Compute hash code
         query_binary_code = self._compute_hash_codes(query_feature_pca)
 
-        # Retrieve similar images
         hamming_distances = np.sum(
             np.bitwise_xor(self.binary_codes, query_binary_code), axis=1
         )
@@ -277,25 +312,30 @@ class SpectralHashing:
     def _visualize_results(
         self, query_image_tensor, retrieved_images, retrieved_distances
     ):
-        # Unnormalize the query image
+        """
+        Visualizes the query image and the top retrieved images along with their Hamming
+        distances to the query.
+
+        Parameters:
+            query_image_tensor (torch.Tensor): The processed query image tensor.
+            retrieved_images (list): List of retrieved image tensors.
+            retrieved_distances (list): List of Hamming distances of the retrieved images.
+        """
         mean = np.array([0.485, 0.456, 0.406])
         std = np.array([0.229, 0.224, 0.225])
 
         query_image_vis = query_image_tensor.squeeze(0).numpy()
-        query_image_vis = query_image_vis.transpose(1, 2, 0)  # Convert to HWC
+        query_image_vis = query_image_vis.transpose(1, 2, 0)
         query_image_vis = std * query_image_vis + mean
         query_image_vis = np.clip(query_image_vis, 0, 1)
 
         retrieved_images_vis = []
         for img in retrieved_images:
-            img = img.numpy().transpose(1, 2, 0)  # Convert to HWC
+            img = img.numpy().transpose(1, 2, 0)
             img = std * img + mean
             img = np.clip(img, 0, 1)
             retrieved_images_vis.append(img)
 
-        # Display the query image and retrieved images
-        num_neighbors = len(retrieved_images_vis)
-        cols = min(num_neighbors + 1, 6)
         plt.figure(figsize=(15, 5))
         plt.subplot(2, 6, 1)
         plt.imshow(query_image_vis)
@@ -312,18 +352,24 @@ class SpectralHashing:
         plt.show()
 
     def compute_map(self, sample_size=None):
+        """
+        Computes the mean average precision (mAP) for retrieval accuracy, measuring how
+        accurately similar images are retrieved for various queries.
+
+        Parameters:
+            sample_size (int or None): Number of samples for mAP calculation. If None,
+            uses the entire dataset.
+
+        Returns:
+            float: The mean average precision score.
+        """
         if self.labels is None:
-            raise ValueError("Labels are required to compute mAP")
+            raise ValueError("Labels are required to compute mAP.")
 
         n_samples = self.binary_codes.shape[0]
-
-        if sample_size is None or sample_size > n_samples:
-            sample_size = n_samples
-
-        indices = np.arange(n_samples)
-        query_indices = indices[:sample_size]
-
-        APs = []
+        sample_size = sample_size or n_samples
+        query_indices = np.arange(n_samples)[:sample_size]
+        aps = []
 
         for query_idx in tqdm(query_indices, desc="Computing mAP"):
             query_code = self.binary_codes[query_idx]
@@ -332,33 +378,48 @@ class SpectralHashing:
             hamming_distances = np.sum(
                 np.bitwise_xor(self.binary_codes, query_code), axis=1
             )
-
             hamming_distances[query_idx] = np.max(hamming_distances) + 1
 
-            ranking_list = np.argsort(hamming_distances)
-            ranking_labels = self.labels[ranking_list]
+            sorted_indices = np.argsort(hamming_distances)
+            sorted_labels = self.labels[sorted_indices]
+            relevant = (sorted_labels == query_label).astype(int)
+            precision_at_k = np.cumsum(relevant) / (np.arange(len(relevant)) + 1)
+            ap = np.sum(precision_at_k * relevant) / np.sum(relevant)
+            aps.append(ap)
 
-            relevant = (ranking_labels == query_label).astype(int)
-            cum = np.cumsum(relevant)
-            precision_at_k = cum / (np.arange(len(relevant)) + 1)
-
-            AP = np.sum(precision_at_k * relevant) / np.sum(relevant)
-            APs.append(AP)
-
-        mean_AP = np.mean(APs)
-        print(f"Mean Average Precision (mAP): {mean_AP:.4f}")
-        return mean_AP
+        mean_ap = np.mean(aps)
+        print(f"Mean Average Precision (mAP): {mean_ap:.4f}")
+        return mean_ap
 
 
 class ImageFolderDataset(Dataset):
+    """
+    Custom Dataset class for loading images from a folder.
+
+    Parameters:
+        image_paths (list): List of paths to the images.
+        transform (callable, optional): Transformations to apply to each image.
+    """
+
     def __init__(self, image_paths, transform=None):
         self.image_paths = image_paths
         self.transform = transform
 
     def __len__(self):
+        """Returns the total number of images in the dataset."""
         return len(self.image_paths)
 
     def __getitem__(self, idx):
+        """
+        Loads and returns an image from the dataset at the specified index after applying
+        transformations.
+
+        Parameters:
+            idx (int): Index of the image to load.
+
+        Returns:
+            torch.Tensor: Transformed image.
+        """
         image = Image.open(self.image_paths[idx]).convert("RGB")
         if self.transform:
             image = self.transform(image)
