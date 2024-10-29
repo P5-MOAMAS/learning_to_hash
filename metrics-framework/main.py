@@ -4,6 +4,8 @@ from torch import nn
 from feature_loader import FeatureLoader
 from gen_cifar_simmat import CifarSimilarityMatrix
 from label_loader import LabelLoader
+from hash_lookup import pre_gen_hash_codes
+
 import torch
 import gc
 
@@ -69,12 +71,12 @@ self.query_model:
 """
 class ModelEvaluator:
     def __init__(self, dataset_name: str, model: nn.Module):
+        self.database = None
         self.model = model
         self.sample = None
         self.labels = None
         self.dataset_name = dataset_name
         self.switch_sample(dataset_name)
-        pass
 
     """
     id is the image identity
@@ -83,7 +85,7 @@ class ModelEvaluator:
     retrieved what percentage do these make up of all related images.
     """
     def calculate_recall(self, id: int, image_ids: list[int]):
-        calculate_recall(self.dataset_name, id, image_ids)
+        return calculate_recall(self.dataset_name, id, image_ids)
 
 
     """
@@ -93,7 +95,27 @@ class ModelEvaluator:
     retrieved what percentage of these are related.
     """
     def calculate_precision(self, id: int, image_ids: list[int]):
-        calculate_recall(self.dataset_name, id, image_ids)
+        return calculate_recall(self.dataset_name, id, image_ids)
+
+
+    def calculate_metrics_for_id(self, id: int):
+        self.prepare_dataset()
+        neighbors = self.database.get_neighbors(id)
+        ids = []
+        for neighbor in neighbors:
+            ids.extend(self.database.get_images(neighbor))
+
+        print("Recall: ", calculate_recall(self.dataset_name, id, ids))
+        print("Precision: ", calculate_precision(self.dataset_name, id, ids))
+
+
+    """
+    Pre-gens all hash codes for the current dataset
+    """
+    def prepare_dataset(self):
+        feature_loader = FeatureLoader(self.dataset_name)
+        for batch in feature_loader:
+            self.database = pre_gen_hash_codes(self.query_model, batch, self.database)
 
 
     def query_model(self, features: torch.Tensor):
@@ -105,9 +127,9 @@ class ModelEvaluator:
     """
     Separate function in case sample should be selected across all batches
     """
-    def get_sample(self, sample_size: int, dataset_name: str, batch_id: int = 1):
-        data = FeatureLoader(dataset_name)[batch_id]
-        labels = LabelLoader(dataset_name)[batch_id]
+    def get_sample(self, sample_size: int, batch_id: int = 1):
+        data = FeatureLoader(self.dataset_name)[batch_id]
+        labels = LabelLoader(self.dataset_name)[batch_id]
 
         selected_ids = random.sample(range(len(data)), sample_size)
         selected_data = [data[x] for x in selected_ids]
