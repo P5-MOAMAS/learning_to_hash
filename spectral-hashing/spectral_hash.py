@@ -1,6 +1,7 @@
 import gc
 import os
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
 import numpy as np
 import torch
 import torchvision
@@ -13,7 +14,7 @@ from sklearn.neighbors import NearestNeighbors
 from torch.utils.data import DataLoader, Dataset, Subset
 from tqdm import tqdm
 from torchvision import transforms, models
-from torchvision.models import VGG16_Weights
+from torchvision.models import ResNet18_Weights
 
 
 class SpectralHashing:
@@ -93,10 +94,17 @@ class SpectralHashing:
         Loads a pre-trained VGG16 model and prepares it as a feature extractor by removing
         the final classifier layers.
         """
-        self.vgg = models.vgg16(weights=VGG16_Weights.DEFAULT)
+
+        # Load a pre-trained ResNet18 model with the most up-to-date weights
+        self.vgg = models.resnet18(weights=ResNet18_Weights.DEFAULT)
         self.vgg = self.vgg.to(self.device)
         self.vgg.eval()  # Set to evaluation mode
-        self.feature_extractor = torch.nn.Sequential(*list(self.vgg.features))
+
+        # Remove the final fully connected layer to get features
+        self.feature_extractor = torch.nn.Sequential(*list(self.vgg.children())[:-1])
+
+        # Optionally, add a flatten layer if needed
+        self.feature_extractor.add_module("flatten", torch.nn.Flatten())
 
     def _load_and_preprocess_images(self, data_source):
         """
@@ -127,7 +135,7 @@ class SpectralHashing:
         labels_list = []
 
         batch_count = 0
-        max_images = 10000  # Adjust this based on your RAM capacity
+        max_images = 30000  # Adjust this based on your RAM capacity
         with torch.no_grad():
             for batch in tqdm(dataloader, total=len(dataloader)):
                 if isinstance(data_source, DataLoader):
@@ -191,12 +199,52 @@ class SpectralHashing:
             f"Reduced features to {self.n_components} dimensions using PCA with whitening."
         )
 
+    # FEATURS AND LABELS
+    # def _build_similarity_graph(self):
+    #     """
+    #     Constructs a k-Nearest Neighbor (k-NN) graph using a combination of features and labels for similarity.
+    #     """
+    #     print("Building k-NN graph with features and labels...")
+    #     k = self.k_neighbors  # Number of nearest neighbors
+    #     nbrs = NearestNeighbors(n_neighbors=k + 1, algorithm="auto").fit(
+    #         self.features_pca
+    #     )
+    #     distances, indices = nbrs.kneighbors(self.features_pca)
+
+    #     # Exclude the point itself in the neighbors
+    #     indices = indices[:, 1:]  # Exclude the first column (index of self)
+
+    #     # Initialize combined similarity
+    #     combined_affinity = np.zeros((self.features_pca.shape[0], k))
+    #     if self.labels is not None:
+    #         for i, neighbors in enumerate(indices):
+    #             for j, neighbor in enumerate(neighbors):
+    #                 feature_similarity = np.exp(-(distances[i, j] ** 2))
+    #                 label_similarity = (
+    #                     1 if self.labels[i] == self.labels[neighbor] else 0
+    #                 )
+    #                 combined_affinity[i, j] = feature_similarity + label_similarity
+
+    #     # Build sparse affinity matrix W
+    #     rows = np.repeat(np.arange(self.features_pca.shape[0]), k)
+    #     cols = indices.flatten()
+    #     data = combined_affinity.flatten()
+    #     W = csr_matrix(
+    #         (data, (rows, cols)),
+    #         shape=(self.features_pca.shape[0], self.features_pca.shape[0]),
+    #     )
+
+    #     # Symmetrize the affinity matrix
+    #     self.W = 0.5 * (W + W.T)
+    #     print("Constructed symmetric affinity matrix using features and labels.")
+
+    # LABELS ONLY
     def _build_similarity_graph(self):
         """
-        Constructs a k-Nearest Neighbor (k-NN) graph using a Gaussian kernel for similarity.
-        The resulting graph is used as the basis for generating hash codes.
+        Constructs a k-Nearest Neighbor (k-NN) graph using labels for similarity,
+        enhancing similarity scores between same-class samples.
         """
-        print("Building k-NN graph...")
+        print("Building k-NN graph with labels...")
         k = self.k_neighbors  # Number of nearest neighbors
         nbrs = NearestNeighbors(n_neighbors=k + 1, algorithm="auto").fit(
             self.features_pca
@@ -204,16 +252,20 @@ class SpectralHashing:
         distances, indices = nbrs.kneighbors(self.features_pca)
 
         # Exclude the point itself in the neighbors
-        distances = distances[:, 1:]  # Exclude the first column (distance to self)
         indices = indices[:, 1:]  # Exclude the first column (index of self)
 
-        # Compute the affinity matrix W using a Gaussian kernel
-        sigma = np.mean(distances)
-        print(f"Using sigma={sigma:.4f} for Gaussian kernel.")
-        affinities = np.exp(-(distances**2) / (2 * sigma**2))
+        # Initialize label-based similarity (1 if labels match, 0 otherwise)
+        label_affinity = np.zeros((self.features_pca.shape[0], k))
+        if self.labels is not None:
+            for i, neighbors in enumerate(indices):
+                for j, neighbor in enumerate(neighbors):
+                    if self.labels[i] == self.labels[neighbor]:
+                        label_affinity[i, j] = 1
+
+        # Build sparse affinity matrix W
         rows = np.repeat(np.arange(self.features_pca.shape[0]), k)
         cols = indices.flatten()
-        data = affinities.flatten()
+        data = label_affinity.flatten()
         W = csr_matrix(
             (data, (rows, cols)),
             shape=(self.features_pca.shape[0], self.features_pca.shape[0]),
@@ -221,12 +273,13 @@ class SpectralHashing:
 
         # Symmetrize the affinity matrix
         self.W = 0.5 * (W + W.T)
-        print("Constructed symmetric affinity matrix using Gaussian kernel.")
+        print("Constructed symmetric affinity matrix considering labels.")
 
     def _compute_laplacian_eigenvectors(self):
         """
         Computes the normalized Laplacian matrix and calculates its eigenvectors. These
-        eigenvectors serve as the basis for generating binary hash codes.
+        eigenvectors serve as the basis for generating binary hash codes, potentially
+        influenced by label distributions.
         """
         print("Computing normalized Laplacian matrix...")
         from scipy.sparse import csgraph
@@ -277,7 +330,7 @@ class SpectralHashing:
         distances.
 
         Parameters:
-            image (PIL.Image or similar): The query image (not preprocessed).
+            image (PIL.Image, torch.Tensor, or similar): The query image. If in tensor format, assumes it's already preprocessed.
             num_neighbors (int): The number of nearest neighbors to retrieve.
             visualize (bool): Whether to display the query and retrieved images.
 
@@ -285,7 +338,17 @@ class SpectralHashing:
             retrieved_images (numpy array): Array of retrieved image tensors.
             retrieved_distances (numpy array): Hamming distances of retrieved images.
         """
-        query_image_tensor = self.transform(image).unsqueeze(0).to(self.device)
+        # Check if the input is a PIL image or already a tensor
+        if isinstance(image, Image.Image):
+            # Convert to tensor using transform
+            query_image_tensor = self.transform(image).unsqueeze(0).to(self.device)
+        elif isinstance(image, torch.Tensor):
+            # Assume tensor is already in the correct format and preprocessed
+            query_image_tensor = image.unsqueeze(0).to(self.device)
+        else:
+            raise ValueError(
+                "Image must be a PIL.Image or a preprocessed torch.Tensor."
+            )
 
         with torch.no_grad():
             query_feature = self.feature_extractor(query_image_tensor)
@@ -313,7 +376,7 @@ class SpectralHashing:
         self, query_image_tensor, retrieved_images, retrieved_distances
     ):
         """
-        Visualizes the query image and the top retrieved images along with their Hamming
+        Visualizes the query image and the retrieved images along with their Hamming
         distances to the query.
 
         Parameters:
@@ -324,11 +387,13 @@ class SpectralHashing:
         mean = np.array([0.485, 0.456, 0.406])
         std = np.array([0.229, 0.224, 0.225])
 
+        # Process query image for visualization
         query_image_vis = query_image_tensor.squeeze(0).numpy()
         query_image_vis = query_image_vis.transpose(1, 2, 0)
         query_image_vis = std * query_image_vis + mean
         query_image_vis = np.clip(query_image_vis, 0, 1)
 
+        # Process retrieved images for visualization
         retrieved_images_vis = []
         for img in retrieved_images:
             img = img.numpy().transpose(1, 2, 0)
@@ -336,17 +401,29 @@ class SpectralHashing:
             img = np.clip(img, 0, 1)
             retrieved_images_vis.append(img)
 
-        plt.figure(figsize=(15, 5))
-        plt.subplot(2, 6, 1)
-        plt.imshow(query_image_vis)
-        plt.title("Query Image")
-        plt.axis("off")
+        num_retrieved = len(retrieved_images)
+        num_cols = min(
+            num_retrieved + 1, 6
+        )  # Limit to 6 columns for better visualization
+        num_rows = (num_retrieved + 1) // num_cols + 1
 
+        fig = plt.figure(figsize=(15, 5 * num_rows))
+        gs = GridSpec(num_rows, num_cols, figure=fig)
+
+        # Display the query image
+        ax = fig.add_subplot(gs[0, 0])
+        ax.imshow(query_image_vis)
+        ax.set_title("Query Image")
+        ax.axis("off")
+
+        # Display the retrieved images with their Hamming distances
         for i, (img, dist) in enumerate(zip(retrieved_images_vis, retrieved_distances)):
-            plt.subplot(2, 6, i + 2)
-            plt.imshow(img)
-            plt.title(f"Hamming Distance: {dist}")
-            plt.axis("off")
+            row = (i + 1) // num_cols
+            col = (i + 1) % num_cols
+            ax = fig.add_subplot(gs[row, col])
+            ax.imshow(img)
+            ax.set_title(f"Hamming Distance: {dist}")
+            ax.axis("off")
 
         plt.tight_layout()
         plt.show()
@@ -388,7 +465,7 @@ class SpectralHashing:
             aps.append(ap)
 
         mean_ap = np.mean(aps)
-        print(f"Mean Average Precision (mAP): {mean_ap:.4f}")
+        print(f"Mean Average Precision (mAP): {mean_ap:.3f}")
         return mean_ap
 
 
@@ -424,3 +501,56 @@ class ImageFolderDataset(Dataset):
         if self.transform:
             image = self.transform(image)
         return image
+
+
+##### TEST BELOW NEED A FROG PICTURE OR JUST USE A CIFAR IMAGE
+
+transform = transforms.Compose(
+    [
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        # Normalization parameters for ImageNet
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+    ]
+)
+
+cifar10_dataset = torchvision.datasets.CIFAR10(
+    root="./data", train=True, download=True, transform=transform
+)
+
+subset_indices = list(range(30000))
+cifar10_subset = Subset(cifar10_dataset, subset_indices)
+
+batch_size = 128
+train_loader = DataLoader(cifar10_subset, batch_size=batch_size, shuffle=False)
+
+spectral_hash = SpectralHashing(
+    data_source=train_loader,
+    num_bits=8,
+    k_neighbors=100,
+    n_components=None,
+    batch_size=batch_size,
+    device=None,
+)
+
+cifar10_image, _ = cifar10_subset[0]  # Get the first image as a tensor
+
+query_image_path = "spectral-hashing\\frog2.jpg"
+if not os.path.isfile(query_image_path):
+    print(f"Query image not found: {query_image_path}")
+else:
+    spectral_hash.compute_map()
+    query_image = Image.open(query_image_path).convert("RGB")
+
+    retrieved_images, retrieved_distances = spectral_hash.query(
+        image=query_image,
+        num_neighbors=30,
+        visualize=True,
+    )
+
+    retrieved_images, retrieved_distances = spectral_hash.query(
+        image=cifar10_image,
+        num_neighbors=30,
+        visualize=True,
+    )
