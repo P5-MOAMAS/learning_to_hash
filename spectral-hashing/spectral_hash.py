@@ -14,7 +14,7 @@ from sklearn.neighbors import NearestNeighbors
 from torch.utils.data import DataLoader, Dataset, Subset
 from tqdm import tqdm
 from torchvision import transforms, models
-from torchvision.models import ResNet18_Weights
+from torchvision.models import ResNet18_Weights, VGG16_Weights
 
 
 class SpectralHashing:
@@ -102,9 +102,6 @@ class SpectralHashing:
 
         # Remove the final fully connected layer to get features
         self.feature_extractor = torch.nn.Sequential(*list(self.vgg.children())[:-1])
-
-        # Optionally, add a flatten layer if needed
-        self.feature_extractor.add_module("flatten", torch.nn.Flatten())
 
     def _load_and_preprocess_images(self, data_source):
         """
@@ -200,51 +197,11 @@ class SpectralHashing:
         )
 
     # FEATURS AND LABELS
-    # def _build_similarity_graph(self):
-    #     """
-    #     Constructs a k-Nearest Neighbor (k-NN) graph using a combination of features and labels for similarity.
-    #     """
-    #     print("Building k-NN graph with features and labels...")
-    #     k = self.k_neighbors  # Number of nearest neighbors
-    #     nbrs = NearestNeighbors(n_neighbors=k + 1, algorithm="auto").fit(
-    #         self.features_pca
-    #     )
-    #     distances, indices = nbrs.kneighbors(self.features_pca)
-
-    #     # Exclude the point itself in the neighbors
-    #     indices = indices[:, 1:]  # Exclude the first column (index of self)
-
-    #     # Initialize combined similarity
-    #     combined_affinity = np.zeros((self.features_pca.shape[0], k))
-    #     if self.labels is not None:
-    #         for i, neighbors in enumerate(indices):
-    #             for j, neighbor in enumerate(neighbors):
-    #                 feature_similarity = np.exp(-(distances[i, j] ** 2))
-    #                 label_similarity = (
-    #                     1 if self.labels[i] == self.labels[neighbor] else 0
-    #                 )
-    #                 combined_affinity[i, j] = feature_similarity + label_similarity
-
-    #     # Build sparse affinity matrix W
-    #     rows = np.repeat(np.arange(self.features_pca.shape[0]), k)
-    #     cols = indices.flatten()
-    #     data = combined_affinity.flatten()
-    #     W = csr_matrix(
-    #         (data, (rows, cols)),
-    #         shape=(self.features_pca.shape[0], self.features_pca.shape[0]),
-    #     )
-
-    #     # Symmetrize the affinity matrix
-    #     self.W = 0.5 * (W + W.T)
-    #     print("Constructed symmetric affinity matrix using features and labels.")
-
-    # LABELS ONLY
     def _build_similarity_graph(self):
         """
-        Constructs a k-Nearest Neighbor (k-NN) graph using labels for similarity,
-        enhancing similarity scores between same-class samples.
+        Constructs a k-Nearest Neighbor (k-NN) graph using a combination of features and labels for similarity.
         """
-        print("Building k-NN graph with labels...")
+        print("Building k-NN graph with features and labels...")
         k = self.k_neighbors  # Number of nearest neighbors
         nbrs = NearestNeighbors(n_neighbors=k + 1, algorithm="auto").fit(
             self.features_pca
@@ -254,18 +211,21 @@ class SpectralHashing:
         # Exclude the point itself in the neighbors
         indices = indices[:, 1:]  # Exclude the first column (index of self)
 
-        # Initialize label-based similarity (1 if labels match, 0 otherwise)
-        label_affinity = np.zeros((self.features_pca.shape[0], k))
+        # Initialize combined similarity
+        combined_affinity = np.zeros((self.features_pca.shape[0], k))
         if self.labels is not None:
             for i, neighbors in enumerate(indices):
                 for j, neighbor in enumerate(neighbors):
-                    if self.labels[i] == self.labels[neighbor]:
-                        label_affinity[i, j] = 1
+                    feature_similarity = np.exp(-(distances[i, j] ** 2))
+                    label_similarity = (
+                        1 if self.labels[i] == self.labels[neighbor] else 0
+                    )
+                    combined_affinity[i, j] = feature_similarity + label_similarity
 
         # Build sparse affinity matrix W
         rows = np.repeat(np.arange(self.features_pca.shape[0]), k)
         cols = indices.flatten()
-        data = label_affinity.flatten()
+        data = combined_affinity.flatten()
         W = csr_matrix(
             (data, (rows, cols)),
             shape=(self.features_pca.shape[0], self.features_pca.shape[0]),
@@ -273,7 +233,70 @@ class SpectralHashing:
 
         # Symmetrize the affinity matrix
         self.W = 0.5 * (W + W.T)
-        print("Constructed symmetric affinity matrix considering labels.")
+        print("Constructed symmetric affinity matrix using features and labels.")
+
+    # LABELS ONLY
+    # def _build_similarity_graph(self):
+    #     """
+    #     Constructs a k-Nearest Neighbor (k-NN) graph using labels for similarity,
+    #     enhancing similarity scores between same-class samples.
+    #     """
+    #     print("Building k-NN graph with labels...")
+    #     k = self.k_neighbors  # Number of nearest neighbors
+    #     nbrs = NearestNeighbors(n_neighbors=k + 1, algorithm="auto").fit(
+    #         self.features_pca
+    #     )
+    #     distances, indices = nbrs.kneighbors(self.features_pca)
+
+    #     # Exclude the point itself in the neighbors
+    #     indices = indices[:, 1:]  # Exclude the first column (index of self)
+
+    #     # Initialize label-based similarity (1 if labels match, 0 otherwise)
+    #     label_affinity = np.zeros((self.features_pca.shape[0], k))
+    #     if self.labels is not None:
+    #         for i, neighbors in enumerate(indices):
+    #             for j, neighbor in enumerate(neighbors):
+    #                 if self.labels[i] == self.labels[neighbor]:
+    #                     label_affinity[i, j] = 1
+
+    #     # Build sparse affinity matrix W
+    #     rows = np.repeat(np.arange(self.features_pca.shape[0]), k)
+    #     cols = indices.flatten()
+    #     data = label_affinity.flatten()
+    #     W = csr_matrix(
+    #         (data, (rows, cols)),
+    #         shape=(self.features_pca.shape[0], self.features_pca.shape[0]),
+    #     )
+
+    #     # Symmetrize the affinity matrix
+    #     self.W = 0.5 * (W + W.T)
+    #     print("Constructed symmetric affinity matrix considering labels.")
+
+    # Features only
+    # def _build_similarity_graph(self):
+    #     print("Building k-NN graph...")
+    #     k = self.k_neighbors
+    #     nbrs = NearestNeighbors(n_neighbors=k + 1, algorithm="auto").fit(
+    #         self.features_pca
+    #     )
+    #     distances, indices = nbrs.kneighbors(self.features_pca)
+
+    #     distances = distances[:, 1:]
+    #     indices = indices[:, 1:]
+
+    #     sigma = np.mean(distances)
+    #     print(f"Using sigma={sigma:.4f} for Gaussian kernel.")
+    #     affinities = np.exp(-(distances**2) / (2 * sigma**2))
+    #     rows = np.repeat(np.arange(self.features_pca.shape[0]), k)
+    #     cols = indices.flatten()
+    #     data = affinities.flatten()
+    #     W = csr_matrix(
+    #         (data, (rows, cols)),
+    #         shape=(self.features_pca.shape[0], self.features_pca.shape[0]),
+    #     )
+
+    #     self.W = 0.5 * (W + W.T)
+    #     print("Constructed symmetric affinity matrix using Gaussian kernel.")
 
     def _compute_laplacian_eigenvectors(self):
         """
@@ -503,54 +526,3 @@ class ImageFolderDataset(Dataset):
         return image
 
 
-##### TEST BELOW NEED A FROG PICTURE OR JUST USE A CIFAR IMAGE
-
-transform = transforms.Compose(
-    [
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        # Normalization parameters for ImageNet
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-    ]
-)
-
-cifar10_dataset = torchvision.datasets.CIFAR10(
-    root="./data", train=True, download=True, transform=transform
-)
-
-subset_indices = list(range(30000))
-cifar10_subset = Subset(cifar10_dataset, subset_indices)
-
-batch_size = 128
-train_loader = DataLoader(cifar10_subset, batch_size=batch_size, shuffle=False)
-
-spectral_hash = SpectralHashing(
-    data_source=train_loader,
-    num_bits=8,
-    k_neighbors=100,
-    n_components=None,
-    batch_size=batch_size,
-    device=None,
-)
-
-cifar10_image, _ = cifar10_subset[0]  # Get the first image as a tensor
-
-query_image_path = "spectral-hashing\\frog2.jpg"
-if not os.path.isfile(query_image_path):
-    print(f"Query image not found: {query_image_path}")
-else:
-    spectral_hash.compute_map()
-    query_image = Image.open(query_image_path).convert("RGB")
-
-    retrieved_images, retrieved_distances = spectral_hash.query(
-        image=query_image,
-        num_neighbors=30,
-        visualize=True,
-    )
-
-    retrieved_images, retrieved_distances = spectral_hash.query(
-        image=cifar10_image,
-        num_neighbors=30,
-        visualize=True,
-    )
