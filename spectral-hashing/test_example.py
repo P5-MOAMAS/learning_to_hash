@@ -19,7 +19,8 @@ from tqdm import tqdm
 from torchvision import transforms, models
 from torchvision.models import VGG16_Weights
 
-# Define transform
+##### TEST BELOW NEED A FROG PICTURE OR JUST USE A CIFAR IMAGE
+
 transform = transforms.Compose(
     [
         transforms.Resize(256),
@@ -30,41 +31,73 @@ transform = transforms.Compose(
     ]
 )
 
-# Download cifar10 dataset, can be changed to use any other dataset
 cifar10_dataset = torchvision.datasets.CIFAR10(
     root="./data", train=True, download=True, transform=transform
 )
 
-# Create subsets
-subset_indices = list(range(10000))
+subset_indices = list(range(25000))
 cifar10_subset = Subset(cifar10_dataset, subset_indices)
 
-#Define batch size and dataloader
 batch_size = 128
 train_loader = DataLoader(cifar10_subset, batch_size=batch_size, shuffle=False)
 
-# Call spectral hashing initialization
-spectral_hash = SpectralHash.SpectralHashing(
+spectral_hash = SpectralHash(
     data_source=train_loader,
-    num_bits=32,
+    num_bits=16,
     k_neighbors=100,
     n_components=None,
     batch_size=batch_size,
     device=None,
 )
 
-# Test image, replace with a picture that you have saved
+cifar10_image, _ = cifar10_subset[0]  # Get the first image as a tensor
+
 query_image_path = "spectral-hashing\\frog2.jpg"
 if not os.path.isfile(query_image_path):
     print(f"Query image not found: {query_image_path}")
 else:
-    # Computes mAP
     spectral_hash.compute_map()
     query_image = Image.open(query_image_path).convert("RGB")
 
-    # Queries the picture and retrieves similar images
     retrieved_images, retrieved_distances = spectral_hash.query(
         image=query_image,
-        num_neighbors=10,
+        num_neighbors=30,
+        visualize=True,
+    )
+
+    retrieved_images, retrieved_distances = spectral_hash.query(
+        image=cifar10_image,
+        num_neighbors=30,
+        visualize=True,
+    )
+
+    cifar10_image, _ = cifar10_subset[1]  # Get the first image as a tensor
+
+    retrieved_images, retrieved_distances = spectral_hash.query(
+        image=cifar10_image,
+        num_neighbors=30,
+        visualize=True,
+    )
+    query_image = Image.open("spectral-hashing\\truckman.jpg").convert("RGB")
+
+    retrieved_images, retrieved_distances = spectral_hash.query(
+        image=query_image,
+        num_neighbors=30,
+        visualize=True,
+    )
+
+    cifar10_image, _ = cifar10_subset[2]  # Get the first image as a tensor
+
+    retrieved_images, retrieved_distances = spectral_hash.query(
+        image=cifar10_image,
+        num_neighbors=30,
+        visualize=True,
+    )
+
+    cifar10_image, _ = cifar10_subset[3]  # Get the first image as a tensor
+
+    retrieved_images, retrieved_distances = spectral_hash.query(
+        image=cifar10_image,
+        num_neighbors=30,
         visualize=True,
     )
