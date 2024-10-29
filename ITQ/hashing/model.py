@@ -1,4 +1,4 @@
-
+import torch
 
 class Model():
     "Hashing model base."

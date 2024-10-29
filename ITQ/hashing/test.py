@@ -1,9 +1,11 @@
+import numpy as np
+import torch
 from itq import ITQ
 from dataset import load_cifar10_deep
 from evaluation import mean_average_precision, precision_recall
 
 # Load CIFAR-10 features
-root = './deep_features/cifar10_features/'
+root = './deep_features/'
 query_data, database_data = load_cifar10_deep(root)
 
 query, query_label = query_data
@@ -17,11 +19,15 @@ print(f'Database shape: {database.shape}, Labels shape: {database_label.shape}')
 encode_len = 32
 model = ITQ(encode_len)
 model.fit(database)
+model.save_model('itq_model.pth')
 
+# Load the model
+loaded_model = ITQ(encode_len)  # Reinitialize the model
+loaded_model.load_model('itq_model.pth')  # Load the saved model
 
 # Encode the query and database
-query_b = model.encode(query)
-database_b = model.encode(database)
+query_b = loaded_model.encode(query)
+database_b = loaded_model.encode(database)
 
 # Evaluation
 mAP = mean_average_precision(query_b, query_label, database_b, database_label)
