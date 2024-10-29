@@ -202,7 +202,7 @@ class SpectralHashing:
         print("Constructed symmetric affinity matrix using Gaussian kernel.")
 
     def _compute_laplacian_eigenvectors(self):
-        print("Computing normalized Laplacian matrix...")
+        print("Computing normalized Laplacian matrix..s.")
         from scipy.sparse import csgraph
 
         L = csgraph.laplacian(self.W, normed=True)
