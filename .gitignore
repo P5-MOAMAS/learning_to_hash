@@ -2,9 +2,11 @@
 /feature-extraction/venv/
 /feature-extraction/autoencoder.egg-info/
 features/*
+ITQ/hashing/deep_features/cifar-10-batches-py/
+.idea
+/ITQ/hashing/deep_features/*
 cifar-10-batches-py/
 spectral-hashing/__pycache__
 lsh
-.idea
 /data
 /spectral-hashing/frog2.jpg 
