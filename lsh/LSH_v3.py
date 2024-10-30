@@ -5,19 +5,25 @@ from scipy.spatial.distance import cosine
 import torchvision
 from torchvision import transforms
 from torch.utils.data import DataLoader
+import numpy as np
+import matplotlib.pyplot as plt
 
-# Set the number of images to use 
-num_images_to_use = 50000
+# Set the number of images to use
+num_images_to_use = 10000
 
 # Define transformation: Convert to tensor and normalize
-transform = transforms.Compose([
-    transforms.Resize((32, 32)),  # Resize to a smaller size (e.g., 32x32) use smaller when not much ram is available. 
-    transforms.ToTensor(),
-])
+transform = transforms.Compose(
+    [
+        transforms.Resize(
+            (32, 32)
+        ),  # Resize to a smaller size (e.g., 32x32) use smaller when not much ram is available.
+        transforms.ToTensor(),
+    ]
+)
 
 # Load STL-10 dataset (unlabeled data)
 stl10_unlabeled_dataset = torchvision.datasets.STL10(
-    root='./data', split='unlabeled', download=True, transform=transform
+    root="./data", split="unlabeled", download=True, transform=transform
 )
 
 # Create a DataLoader for the unlabeled dataset
@@ -29,7 +35,9 @@ batch_count = 0
 
 # Iterate over the dataset to collect images in batches
 for image_batch, _ in train_loader:
-    images.extend(image_batch.numpy().transpose(0, 2, 3, 1))  # Convert tensors to numpy arrays (N, H, W, C) N number of batches height widht and number of channels
+    images.extend(
+        image_batch.numpy().transpose(0, 2, 3, 1)
+    )  # Convert tensors to numpy arrays (N, H, W, C) N number of batches height widht and number of channels
     batch_count += image_batch.size(0)
 
     # Check if we've reached the desired number of images
@@ -55,9 +63,15 @@ class LSH_min:
         self.num_hashes = num_hashes
         self.num_tables = num_tables
         self.images = self._normalize_images(images)  # Normalize the images first
-        self.pca_components = pca_components if pca_components is not None else num_hashes
-        self.pca = PCA(n_components=self.pca_components)  # Apply PCA with specified or default components
-        self.transformed_images = self.pca.fit_transform(self._flatten_images(self.images))  # PCA-transformed images
+        self.pca_components = (
+            pca_components if pca_components is not None else num_hashes
+        )
+        self.pca = PCA(
+            n_components=self.pca_components
+        )  # Apply PCA with specified or default components
+        self.transformed_images = self.pca.fit_transform(
+            self._flatten_images(self.images)
+        )  # PCA-transformed images
 
         self.hash_tables = [defaultdict(list) for _ in range(num_tables)]
         self.minhash_permutations = self._generate_permutations(num_hashes)
@@ -86,7 +100,7 @@ class LSH_min:
         image_set = set(np.nonzero(image)[0])  # Use non-zero indices as the "set"
         signature = []
 
-        for (a, b) in self.minhash_permutations:
+        for a, b in self.minhash_permutations:
             min_hash_value = min(((a * x + b) % (2**32 - 1)) for x in image_set)
             signature.append(min_hash_value)
 
@@ -113,8 +127,12 @@ class LSH_min:
     def query(self, query_image, n_neighbors=5, distance_metric="cosine"):
         """Query the nearest neighbors of a given image."""
         candidate_indices = set()
-        query_image_normalized = self._normalize_images([query_image])  # Normalize query image
-        query_image_flat = self.pca.transform(query_image_normalized.flatten().reshape(1, -1))[0]
+        query_image_normalized = self._normalize_images(
+            [query_image]
+        )  # Normalize query image
+        query_image_flat = self.pca.transform(
+            query_image_normalized.flatten().reshape(1, -1)
+        )[0]
         minhash_signature = self._minhash_signature(query_image_flat)
 
         for table_id in range(self.num_tables):
@@ -131,38 +149,42 @@ class LSH_min:
             elif distance_metric == "cosine":
                 dist = self._cosine_distance(query_image_flat, image_flat)
             else:
-                raise ValueError("Unsupported distance metric. Use 'euclidean' or 'cosine'.")
+                raise ValueError(
+                    "Unsupported distance metric. Use 'euclidean' or 'cosine'."
+                )
 
             distances.append((idx, dist))
 
         return sorted(distances, key=lambda x: x[1])[:n_neighbors]
 
 
-##### TESTING 
+##### TESTING
 
-#config with highest F1score so far
+# config with highest F1score so far
 # Number of hash bits 37
 # Number of buckets 42
 # Number of PCA components 300
 # Number of neighbors 6
 
-Lsh_min = LSH_min(37,42,images = images, pca_components= 300) #config with highest F1score so far
+Lsh_min = LSH_min(
+    37, 42, images=images, pca_components=300
+)  # config with highest F1score so far
 
 query_image = images[7]
-result = Lsh_min.query(query_image,6,"euclidean")  
+result = Lsh_min.query(query_image, 6, "euclidean")
 
 
 fig, axes = plt.subplots(1, 7, figsize=(20, 6))
 
-axes[0].imshow(query_image.reshape(32,32,3))
-axes[0].set_title('Query Image')
-axes[0].axis('off')
+axes[0].imshow(query_image.reshape(32, 32, 3))
+axes[0].set_title("Query Image")
+axes[0].axis("off")
 
 for i, (neighbor_id, distance) in enumerate(result):
-    neighbor_image = images[neighbor_id].reshape(32,32,3)
-    axes[i+1].imshow(neighbor_image)
-    axes[i+1].set_title(f'Neighbor {i+1}\nDistance: {distance:.2f}')
-    axes[i+1].axis('off')
+    neighbor_image = images[neighbor_id].reshape(32, 32, 3)
+    axes[i + 1].imshow(neighbor_image)
+    axes[i + 1].set_title(f"Neighbor {i+1}\nDistance: {distance:.2f}")
+    axes[i + 1].axis("off")
 
 
 plt.tight_layout()
