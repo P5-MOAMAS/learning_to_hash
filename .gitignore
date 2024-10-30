@@ -5,3 +5,8 @@ features/*
 ITQ/hashing/deep_features/cifar-10-batches-py/
 .idea
 /ITQ/hashing/deep_features/*
+cifar-10-batches-py/
+spectral-hashing/__pycache__
+lsh
+/data
+/spectral-hashing/frog2.jpg 
