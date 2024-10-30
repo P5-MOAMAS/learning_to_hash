@@ -77,8 +77,6 @@ image_lsh = LSH(
     num_bits_per_table=num_bits_per_table,
     pca_components=pca_components,
 )
-image_lsh.run()
-
 # Query example
 k = 10  # Number of nearest neighbors to return
 similar_indices = image_lsh.query(query_image, k)
