@@ -1,6 +1,7 @@
 /feature-extraction/imagenet-vgg16.pth
 /feature-extraction/venv/
-/feature-extraction/autoencoder.egg-info/
+
+*.egg-info
 
 /metrics-framework/sim_matrix
 /labelextractor.egg-info
