@@ -14,8 +14,6 @@ description = "Label extraction"
 dependencies = [
     "numpy",
     "scikit-learn",
-    "progressbar",
-    "metrics-framework",
     "torch",
     "Pillow",
     "torchvision",
