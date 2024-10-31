@@ -14,7 +14,8 @@ description = "Label extraction"
 dependencies = [
     "numpy",
     "scikit-learn",
-    "progressbar @ file:///root/learning_to_hash/util/progressbar",
+    "progressbar",
+    "metrics-framework",
     "torch",
     "Pillow",
     "torchvision",
