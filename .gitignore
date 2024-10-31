@@ -1,12 +1,8 @@
 /feature-extraction/imagenet-vgg16.pth
-/feature-extraction/venv/
+/metrics-framework/sim_matrix
 
 *.egg-info
-
-/metrics-framework/sim_matrix
-/labelextractor.egg-info
 __pycache__
-
 venv
 
 features/*
