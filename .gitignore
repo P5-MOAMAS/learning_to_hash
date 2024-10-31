@@ -3,8 +3,10 @@
 /feature-extraction/autoencoder.egg-info/
 
 /metrics-framework/sim_matrix
-
+/labelextractor.egg-info
 __pycache__
+
+venv
 
 features/*
 cifar-10-batches-py/
