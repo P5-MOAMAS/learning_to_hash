@@ -1,4 +1,5 @@
 import random
+from typing import Callable
 
 from torch import nn
 from feature_loader import FeatureLoader
@@ -8,6 +9,17 @@ from hash_lookup import pre_gen_hash_codes
 
 import torch
 import gc
+
+"""
+Takes a function that generates an image hash code, given an image.
+function: function from image to hash code.
+dataset_name: name of the dataset to use.
+
+Generate useful metrics for measuring how well the function approximates
+a hash code for the given image.
+"""
+def calculate_metrics(function: Callable, dataset_name, is_deep = True):
+    pass
 
 def calculate_recall(dataset_name: str, id: int, image_ids: list[int]):
     sim_matrix = None
