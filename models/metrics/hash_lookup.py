@@ -2,7 +2,7 @@ from typing import Callable
 
 import numpy as np
 
-from util.progressbar.src.progressbar import progressbar
+from progressbar import progressbar
 
 
 class Database:
