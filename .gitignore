@@ -1,4 +1,4 @@
-/models/metrics-framework/sim_matrix
+/models/metrics/sim_matrix
 /models/feature-extraction/imagenet-vgg16.pth
 *.egg-info
 __pycache__
