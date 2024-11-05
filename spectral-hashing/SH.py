@@ -1,198 +1,227 @@
-import os
+import torch
 import numpy as np
-from scipy.sparse import csr_matrix, diags
-from scipy.io import loadmat
-from sklearn.cluster import KMeans
-from scipy.spatial.distance import cdist
-from numpy.linalg import inv
 from sklearn.decomposition import PCA
+import pickle
 
 
-class SH:
-    def __init__(
-        self, K=8, Z_spec=None, random_state=42, init="random", n_components=None
-    ):
+class SpectralHashing:
+    def __init__(self, code_length):
         """
-        Initialize the Spectral Hashing (SH) model with PCA.
+        Initialize the Spectral Hashing model.
 
-        :param K: Number of bits for each binary code.
-        :param Z_spec: Dictionary specifying how to compute the anchor-based representation.
-        :param random_state: Random seed for reproducibility.
-        :param init: Initialization method for anchor points ('random' or 'kmeans').
-        :param n_components: Number of components for PCA.
+        Args:
+            code_length (int): Length of the hash codes to generate.
         """
-        self.K = K
-        self.Z_spec = Z_spec
-        self.random_state = random_state
-        self.init = init
-        self.n_components = n_components
-        self.pca = None
-        self.anchors = None
-        self.W = None
+        self.code_length = code_length
+        self.pca = None  # PCA model
+        self.mn = None  # Minimum values after PCA
+        self.R = None  # Range of values after PCA
+        self.modes = None  # Eigenfunctions modes
+        self.omegas = None  # Omega values for modes
+        self.omega0 = None  # Base omega values
 
-    def fit(self, X_train):
+    def fit(self, train_data):
         """
-        Fit the Spectral Hashing model on the training data.
+        Train the Spectral Hashing model by performing PCA, fitting the uniform distribution,
+        and enumerating eigenfunctions.
 
-        :param X_train: Training data with shape (n_samples, n_features).
+        Args:
+            train_data (torch.Tensor or np.ndarray): Training data.
         """
-        # Step 1: Apply PCA for dimensionality reduction
-        if self.n_components:
-            self.pca = PCA(
-                n_components=self.n_components, random_state=self.random_state
-            )
-            X_train = self.pca.fit_transform(X_train)
+        if isinstance(train_data, torch.Tensor):
+            train_data = train_data.numpy()
 
-        # Step 2: Compute the anchor-based representation and binary codes
-        self.Z_train, self.anchors = self._compute_affinity(X_train)
-        self.B_train = self._compute_binary_codes(self.Z_train)
+        # Step 1: Perform PCA on the training data
+        X = self.perform_pca(train_data)
 
-        # Step 3: Compute the projection matrix for out-of-sample extension
-        self.W = self._projection_matrix(self.B_train, self.Z_train)
+        # Step 2: Fit a uniform distribution to the PCA-transformed data
+        self.fit_uniform_distribution(X)
 
-    def query(self, X_test):
+        # Step 3: Compute omega0 (base frequencies)
+        self.compute_omega0()
+
+        # Step 4: Compute modes (eigenfunctions indices)
+        modes = self.compute_modes()
+
+        # Step 5: Compute omega values for modes
+        omegas = self.compute_omegas(modes)
+
+        # Step 6: Compute eigenvalues for the modes
+        eig_vals = self.compute_eigenvalues(omegas)
+
+        # Step 7: Select top modes based on eigenvalues
+        self.select_top_modes(modes, omegas, eig_vals)
+
+    def perform_pca(self, data):
         """
-        Generate binary codes for new (unseen) samples.
+        Perform PCA on the training data to reduce dimensionality.
 
-        :param X_test: Test data with shape (n_test, n_features).
-        :return: Binary codes with shape (n_test, K).
+        Args:
+            data (np.ndarray): Training data.
+
+        Returns:
+            np.ndarray: Data transformed by PCA.
         """
-        # Apply PCA to the test data if PCA was used in training
-        if self.pca:
-            X_test = self.pca.transform(X_test)
+        self.pca = PCA(n_components=self.code_length)
+        X = self.pca.fit_transform(data)
+        return X
 
-        # Generate anchor-based representation and binary codes for test data
-        Z_test = self._to_Z(X_test, self.anchors)
-        B_test = Z_test @ self.W.T
-        return np.sign(B_test)
+    def fit_uniform_distribution(self, X):
+        """
+        Fit a uniform distribution to the PCA-transformed data by calculating the minimum and
+        maximum values, then computing the range.
 
-    def _compute_affinity(self, data):
-        n_anchors = self.Z_spec["n_anchors"]
-        if self.init.lower() == "random":
-            R = np.random.RandomState(self.random_state)
-            anchors = data[R.choice(data.shape[0], size=n_anchors, replace=False), :]
-        elif self.init.lower() == "kmeans":
-            kmeans = KMeans(n_clusters=n_anchors, random_state=self.random_state).fit(
-                data
-            )
-            anchors = kmeans.cluster_centers_
-        Z = self._to_Z(data, anchors)
-        return Z, anchors
+        Args:
+            X (np.ndarray): PCA-transformed data.
+        """
+        eps = np.finfo(float).eps  # Machine epsilon to prevent division by zero
+        self.mn = X.min(axis=0) - eps
+        mx = X.max(axis=0) + eps
+        self.R = mx - self.mn  # Range of values
 
-    def _to_Z(self, inputs, anchors):
-        s = self.Z_spec["s"]
-        sigma = self.Z_spec["sigma"]
-        Dis = np.float32(cdist(inputs, anchors, metric=self.Z_spec["metric"]))
-        min_val, min_pos = (
-            np.zeros((inputs.shape[0], s), dtype="float32"),
-            np.zeros((inputs.shape[0], s), dtype="int"),
-        )
+    def compute_omega0(self):
+        """
+        Compute the base omega values (frequencies) for each dimension.
+        """
+        self.omega0 = np.pi / self.R
 
-        for i in range(s):
-            min_pos[:, i] = np.argmin(Dis, axis=1)
-            min_val[:, i] = Dis[np.arange(inputs.shape[0]), min_pos[:, i]]
-            Dis[np.arange(inputs.shape[0]), min_pos[:, i]] = np.inf
+    def compute_modes(self):
+        """
+        Compute the modes (indices of the eigenfunctions) for spectral hashing.
 
-        if sigma is None:
-            sigma = np.mean(min_val[:, -1])
-        min_val = np.exp(-((min_val / sigma) ** 2))
-        min_val /= np.sum(min_val, axis=1, keepdims=True)
-        Z = np.zeros((inputs.shape[0], anchors.shape[0]), dtype="float32")
+        Returns:
+            np.ndarray: Modes matrix.
+        """
+        # Calculate the maximum number of modes for each dimension
+        max_mode = np.ceil((self.code_length + 1) * self.R / self.R.max()).astype(int)
+        n_modes = max_mode.sum() - len(max_mode) + 1
 
-        for i in range(s):
-            Z[np.arange(inputs.shape[0]), min_pos[:, i]] = min_val[:, i]
+        # Initialize modes matrix
+        modes = np.ones((n_modes, self.code_length))
+        m = 0
+        for i in range(self.code_length):
+            # Assign modes for each dimension
+            modes[m + 1 : m + max_mode[i], i] = np.arange(1, max_mode[i]) + 1
+            m = m + max_mode[i] - 1
 
-        return Z
+        modes -= 1  # Adjust modes by subtracting 1
+        return modes
 
-    def _compute_binary_codes(self, Z):
-        Z = csr_matrix(Z, dtype="float32")
-        D = np.array(1 / np.sqrt(np.sum(Z, axis=0)), dtype="float32")
-        D = diags(D.flatten(), dtype="float32")
-        M = (D @ Z.T @ Z @ D).toarray()
-        lambdas, eigen_vecs = np.linalg.eigh(M)
-        idx_eig = np.argsort(-lambdas)
-        lambdas, eigen_vecs = (
-            lambdas[idx_eig[1 : self.K + 1]],
-            eigen_vecs[:, idx_eig[1 : self.K + 1]],
-        )
-        S = np.diag(1 / np.sqrt(lambdas))
-        B = Z @ D @ eigen_vecs @ S
-        B = np.sqrt(Z.shape[0]) * B
-        return np.sign(B)
+    def compute_omegas(self, modes):
+        """
+        Compute the omega values for each mode.
 
-    def _projection_matrix(self, B, Z):
-        D = np.array(1 / (np.sum(Z, axis=0)), dtype="float32")
-        D = np.diag(D.flatten())
-        return B.T @ Z @ D
+        Args:
+            modes (np.ndarray): Modes matrix.
 
+        Returns:
+            np.ndarray: Omegas corresponding to the modes.
+        """
+        omegas = modes * self.omega0.reshape(1, -1)
+        return omegas
 
-def cifar10_gist(path, one_hot=True, **kwargs):
-    """
-    Inputs:
-        path: The path containing cifar10_gist512 features
-        one_hot: If True, return one hoted labels.
-    Outputs:
-        train features, train labels, test features, and test labels.
-    """
-    train_path = os.path.join(path, "cifar10_gist512_train.mat")
-    test_path = os.path.join(path, "cifar10_gist512_test.mat")
+    def compute_eigenvalues(self, omegas):
+        """
+        Compute the eigenvalues for the given omegas.
 
-    train_dict = loadmat(train_path, squeeze_me=True)
-    test_dict = loadmat(test_path, squeeze_me=True)
+        Args:
+            omegas (np.ndarray): Omegas corresponding to the modes.
 
-    train_features, train_labels = (
-        train_dict["train_features"],
-        train_dict["train_labels"],
-    )
-    test_features, test_labels = test_dict["test_features"], test_dict["test_labels"]
+        Returns:
+            np.ndarray: Eigenvalues for each mode.
+        """
+        eig_vals = -np.sum(omegas**2, axis=1)
+        return eig_vals
 
-    return train_features, train_labels, test_features, test_labels
+    def select_top_modes(self, modes, omegas, eig_vals):
+        """
+        Select the top modes based on eigenvalues to use for hashing.
 
+        Args:
+            modes (np.ndarray): Modes matrix.
+            omegas (np.ndarray): Omegas corresponding to the modes.
+            eig_vals (np.ndarray): Eigenvalues for each mode.
+        """
+        # Sort modes based on eigenvalues in descending order
+        sorted_indices = np.argsort(-eig_vals)
+        # Exclude the first index (constant eigenfunction)
+        indices = sorted_indices[1 : self.code_length + 1]
+        # Select top modes and their omegas
+        self.modes = modes[indices, :]
+        self.omegas = omegas[indices, :]
 
-# map dataset names to dataset loaders
-Dataset_maps = {"cifar10_gist512": cifar10_gist}
+    def query(self, data):
+        """
+        Generate hash codes for the given data using the trained spectral hashing model.
 
+        Args:
+            data (torch.Tensor or np.ndarray): Data to generate hash codes for.
 
-# loader function
-def load_dataset(name, path=".", **kwargs):
-    """
-    the name of dataset. It can be one of 'cifar10_gist512', 'cifar10_vggfc7',
-        'mnist_gist512', 'labelme_vggfc7', 'nuswide_vgg', 'colorectal_efficientnet',
-        or 'sun397'.
-    path: the path containing dataset files (Do not include the filenames of
-        dataset)
-    **kwargs are passed to the function that loads name dataset.
-    """
-    dataset_loader = Dataset_maps[name.lower()]
-    train_features, train_labels, test_features, test_labels = dataset_loader(
-        path, **kwargs
-    )
-    return train_features, train_labels, test_features, test_labels
+        Returns:
+            np.ndarray: Generated hash codes.
+        """
+        if isinstance(data, torch.Tensor):
+            data = data.numpy()
 
+        # Transform data using PCA and adjust by the minimum values
+        data = self.pca.transform(data) - self.mn.reshape(1, -1)
 
-import numpy as np
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import pairwise_distances
+        # Initialize the hash code matrix
+        U = np.zeros((len(data), self.code_length))
+        for i in range(self.code_length):
+            # Compute the i-th hash function
+            omegai = self.omegas[i, :]
+            ys = np.sin(data * omegai + np.pi / 2)
+            yi = np.prod(ys, axis=1)
+            U[:, i] = yi
 
-# Load data
-path = "./spectral-hashing/cifar10_gist512"  # Adjust this path as needed
-dataset_name = "cifar10_gist512"
-train_features, train_labels, test_features, test_labels = load_dataset(
-    dataset_name, path=path, one_hot=False
-)
+        # Return the sign of U as the binary hash codes
+        return np.sign(U)
 
-# Normalize data
-scaler = StandardScaler()
-train_features = scaler.fit_transform(train_features.astype("float32"))
-test_features = scaler.transform(test_features.astype("float32"))
+    def save_model(self, filepath):
+        """
+        Save the Spectral Hashing model to a file.
 
-# SH parameters
-K = 16
-Z_spec = {"n_anchors": 300, "s": 5, "sigma": None, "metric": "euclidean"}
+        Args:
+            filepath (str): Path to the file where the model will be saved.
+        """
+        # Prepare the model parameters to save
+        model_params = {
+            "code_length": self.code_length,
+            "pca": self.pca,
+            "mn": self.mn,
+            "R": self.R,
+            "modes": self.modes,
+            "omegas": self.omegas,
+            "omega0": self.omega0,
+        }
 
-# Initialize and train SH model
-sh_model = SH(K=K, Z_spec=Z_spec, init="kmeans", random_state=42, n_components=100)
-sh_model.fit(train_features)
+        # Save the model parameters using pickle
+        with open(filepath, "wb") as f:
+            pickle.dump(model_params, f)
 
-# Generate binary codes for test data
-test_codes = sh_model.query(test_features)
+    @classmethod
+    def load_model(cls, filepath):
+        """
+        Load the Spectral Hashing model from a file.
+
+        Args:
+            filepath (str): Path to the file where the model is saved.
+
+        Returns:
+            SpectralHashing: The loaded Spectral Hashing model.
+        """
+        # Load the model parameters using pickle
+        with open(filepath, "rb") as f:
+            model_params = pickle.load(f)
+
+        # Create a new instance of SpectralHashing
+        model = cls(model_params["code_length"])
+
+        # Set the loaded parameters
+        model.pca = model_params["pca"]
+        model.mn = model_params["mn"]
+        model.R = model_params["R"]
+        model.modes = model_params["modes"]
+        model.omegas = model_params["omegas"]
+        model.omega0 = model_params["omega0"]
