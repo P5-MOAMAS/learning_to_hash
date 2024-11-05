@@ -68,7 +68,7 @@ class ResNet(nn.Module):
 class LiuDSH(nn.Module):
     def __init__(self, code_size: int):
         super().__init__()
-        resnet = ResNet(num_classes=10)
+        resnet = ResNet(num_classes=1000)
         resnet.linear = nn.Linear(in_features=resnet.linear_input_size, out_features=code_size)
         self.net = resnet
         self.apply(self.init_weights)
@@ -83,7 +83,7 @@ class LiuDSH(nn.Module):
 
 if __name__ == '__main__':
 
-    dummy_tensor = torch.randn((10, 3, 32, 32))
+    dummy_tensor = torch.randn((1000, 3, 256, 256))
     dsh = LiuDSH(code_size=11)
     print(dsh)
     print(dsh(dummy_tensor).size())

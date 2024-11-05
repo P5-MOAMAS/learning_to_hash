@@ -1,5 +1,5 @@
 import random
-from torchvision.datasets import CIFAR10, MNIST
+from torchvision.datasets import  ImageNet
 from torch.utils.data import DataLoader, Dataset
 import torchvision.transforms as transforms
 
@@ -9,10 +9,10 @@ NUM_WORKERS = 8
 CODE_SIZE = 8  # bits
 
 
-class CIFAR10PairDataset(Dataset):
+class ImageNetPairDataSet(Dataset):
     def __init__(self, data_root: str, transform=None, train=True):
         super().__init__()
-        self.dataset = CIFAR10(root=data_root, train=train, transform=transform, download=True)
+        self.dataset = ImageNet(root=data_root, train=train, transform=transform, download=True)
         self.size = len(self.dataset)
 
     def __len__(self):
@@ -41,14 +41,14 @@ def print_sample_pairs(dataloader):
             print(f"  x_target: {x_targets[i]}, y_target: {y_targets[i]}, target_equals: {target_equals[i]}")
         break
 
-cifar_transform = transforms.Compose([
+imagenet_transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
  ])
 
 if __name__ == "__main__":  # Corrected syntax
-    train_pair_dataset = CIFAR10PairDataset(data_root=DATA_ROOT, train=True, transform=cifar_transform)
-    test_pair_dataset = CIFAR10PairDataset(data_root=DATA_ROOT, train=False, transform=cifar_transform)
+    train_pair_dataset = ImageNetPairDataSet(data_root=DATA_ROOT, train=True, transform=imagenet_transform)
+    test_pair_dataset = ImageNetPairDataSet(data_root=DATA_ROOT, train=False, transform=imagenet_transform)
 
     train_dataloader = DataLoader(
         train_pair_dataset,
