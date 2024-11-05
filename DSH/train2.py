@@ -7,7 +7,6 @@ import torch
 from torch import nn
 from torch import optim
 from torchvision.datasets import CIFAR10
-from torchvision.datasets.mnist import MNIST
 from torch.utils.data import DataLoader, Dataset
 import torchvision.transforms as transforms
 from torch.utils.tensorboard import SummaryWriter
@@ -15,7 +14,7 @@ import numpy as np
 from model import LiuDSH
 
 # hyper-parameters
-DATA_ROOT = r'C:\Users\Sandra\PycharmProjects\learning_to_hash\datasets\cifar-10-batches-py'
+DATA_ROOT = 'data_out'
 LR_INIT = 3e-4
 BATCH_SIZE = 128
 EPOCH = 5
@@ -65,28 +64,7 @@ def print_sample_pairs(dataloader):
             print(f"  x_target: {x_targets[i]}, y_target: {y_targets[i]}, target_equals: {target_equals[i]}")
         break
 
-train_pair_dataset = CIFAR10PairDataset(data_root=DATA_ROOT, train=True, transform=cifar_transform)
-test_pair_dataset = CIFAR10PairDataset(data_root=DATA_ROOT, train=False, transform=cifar_transform)
 
-train_dataloader = DataLoader(
-    train_pair_dataset,
-    batch_size=BATCH_SIZE,
-    shuffle=True,
-    drop_last=True,
-    num_workers=NUM_WORKERS
-)
-test_dataloader = DataLoader(
-    test_pair_dataset,
-    batch_size=BATCH_SIZE,
-    shuffle=True,
-    drop_last=True,
-    num_workers=NUM_WORKERS
-)
-
-print(f'Train set size: {len(train_pair_dataset)}')
-print(f'Test set size: {len(test_pair_dataset)}')
-
-print_sample_pairs(train_dataloader)
 
 model = LiuDSH(code_size=CODE_SIZE).to(device)
 
@@ -102,7 +80,7 @@ class Trainer:
         self.global_epoch = 0
         self.total_epochs = EPOCH
 
-        self.input_shape = (1, 28, 28)
+        self.input_shape = (3, 32, 32)
         self.writer = SummaryWriter()
         self.writer.add_graph(model, self.generate_dummy_input(), verbose=True)
 
@@ -226,5 +204,27 @@ class Trainer:
 
 
 if __name__ == '__main__':
+
+    train_pair_dataset = CIFAR10PairDataset(data_root=DATA_ROOT, train=True, transform=cifar_transform)
+    test_pair_dataset = CIFAR10PairDataset(data_root=DATA_ROOT, train=False, transform=cifar_transform)
+
+    train_dataloader = DataLoader(
+        train_pair_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        drop_last=True,
+        num_workers=NUM_WORKERS
+    )
+    test_dataloader = DataLoader(
+        test_pair_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        drop_last=True,
+        num_workers=NUM_WORKERS
+    )
+
+    print(f'Train set size: {len(train_pair_dataset)}')
+    print(f'Test set size: {len(test_pair_dataset)}')
+    print_sample_pairs(train_dataloader)
     trainer = Trainer()
     trainer.train()
