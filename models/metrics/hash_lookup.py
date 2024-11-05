@@ -1,26 +1,37 @@
+import pickle
+import sys
 from typing import Callable
 
 import numpy as np
-
-from util.progressbar.src.progressbar import progressbar
+from progressbar.progressbar import progressbar
 
 
 class Database:
     def __init__(self):
         # Key hashcode - value array of ids of picture that has that hash-code
-        self.database = {}
+        self.database = []
+        self.hashcodes = []
 
 
     def __getitem__(self, key) -> list | None:
-        return self.database[key] if key in self.database else None
+        index = self.get_hash_code_index(key)
+        return self.database[index] if index is not None else None
+
+
+    def get_hash_code_index(self, key) -> int | None:
+        for i, hashcode in enumerate(self.hashcodes):
+            if np.array_equal(hashcode, key):
+                return i
+        return None
 
 
     def __setitem__(self, key, value) -> None:
-        if key in self.database:
-            self.database[key].append(value)
+        index = self.get_hash_code_index(key)
+        if index is None:
+            self.database.append([value])
+            self.hashcodes.append(key)
         else:
-            self.database[key] = [value]
-
+            self.database[index].append(value)
 
     """
     Finds all neighbors in the Database within a given distance
@@ -32,12 +43,29 @@ class Database:
     """
     def get_neighbors(self, query, max_distance: int = 5) -> dict:
         neighbors = {}
-        for key in self.database.keys():
-            distance = self.hamming_distance(query, key)
+        for i, code in enumerate(self.hashcodes):
+            distance = self.hamming_distance(query, code)
             if distance <= max_distance:
-                neighbors[key] = distance
+                neighbors[i] = distance
         return neighbors
 
+
+    def get_nearest_neighbors(self, query, amount: int = 10) -> list:
+        neighbors = []
+        # Get all neighbors
+        neighbors_distance = self.get_neighbors(query, max_distance=sys.maxsize)
+
+        # Sorts by distance first then index in the array
+        distance_sorted = dict(sorted(neighbors_distance.items(), key=lambda item: (item[1], item[0])))
+
+        for key in distance_sorted.keys():
+            images = self.database[key]
+            for image in images:
+                if len(neighbors) < amount:
+                    neighbors.append(image)
+                else:
+                    return neighbors
+        return neighbors
 
     """
     Calculates the distance between two hash-codes
@@ -62,9 +90,22 @@ returns - A Database containing all generated hash codes
 """
 def pre_gen_hash_codes(model_query: Callable, dataset: np.ndarray, db: Database = None) -> Database:
     db = Database() if db is None else db
-
-    for index in progressbar(range(len(dataset)), "Generating hash codes"):
+    print("-" * 19, "Generating hash codes", "-" * 19)
+    for index in progressbar(range(len(dataset))):
         key = model_query(dataset[index])
         db[key] = index
 
     return db
+
+# Test function please delete
+def generate_binary_hash(input_data, hash_size=4):
+    hash_value = hash(input_data.tobytes())
+    binary_hash = bin(hash_value & int('1' * hash_size, 2))[2:].zfill(hash_size)
+    return np.array([int(bit) for bit in binary_hash], dtype=int)
+
+if __name__ == "__main__":
+    with open("cifar-10-batches-py/data_batch_1", 'rb') as fo:
+        data = pickle.load(fo, encoding='bytes')[b'data'][:100]
+    db = pre_gen_hash_codes(generate_binary_hash, data)
+    neighbors = db.get_nearest_neighbors(generate_binary_hash(data[0]))
+    print("Images ids of the", len(neighbors), "nearest neighbors:", neighbors)
