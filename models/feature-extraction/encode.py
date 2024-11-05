@@ -55,7 +55,7 @@ class Encoder:
     def encode_batch(self, dataset: list):
         codes = []
         for code in self.encode_batch_images(dataset):
-            codes.append(code.flatten())
+            codes.append(nn.functional.adaptive_avg_pool2d(code, (1, 1)).squeeze())
 
         return torch.stack(codes, dim=0)
 
@@ -76,7 +76,7 @@ class Encoder:
         model = vgg.VGGAutoEncoder(vgg.get_configs())
         model = nn.DataParallel(model).to(self.device)
 
-        self.load_dict("feature-extraction/imagenet-vgg16.pth", model)
+        self.load_dict("models/feature-extraction/imagenet-vgg16.pth", model)
         model.eval()
 
         return model
