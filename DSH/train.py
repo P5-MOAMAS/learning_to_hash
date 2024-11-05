@@ -22,22 +22,29 @@ NUM_WORKERS = 8
 CODE_SIZE = 8  # bits
 MARGIN = 5
 ALPHA = 0.01  # TODO: adjust
+DATASET = 'cifar' # Choose between mnist, Cifar10, ImageNet
+SIZE = 32 # Dimension of the picture e.g. 32 (32x32 pic)
+CHANNELS = 3 # The amount of color channels
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 torch.set_default_dtype(torch.float)
 
-mnist_transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize(mean=(0.1307, ), std=(0.3081, )),
-])
-
-class MNISTPairDataset(Dataset):
+class PairDataset(Dataset):
     def __init__(self, data_root: str, transform=None, train=True):
         super().__init__()
-        self.dataset = MNIST(root=data_root, train=train, transform=transform, download=True)
-        self.size = len(self.dataset)
-
+        match DATASET:
+            case 'mnist':
+                self.dataset = MNIST(root=data_root, train=train, transform=transforms.Compose([transforms.ToTensor(),transforms.Normalize(mean=(0.1307, ), std=(0.081, )),]), download=True)
+                self.size = len(self.dataset)
+            case 'cifar':
+                self.dataset = CIFAR10(root=data_root, train=train, transform=transforms.Compose([transforms.ToTensor(),transforms.Normalize(mean=(0.5, 0.5, 0.5),std=(0.5, 0.5, 0.5))]), download=True)
+                self.size = len(self.dataset)
+            case 'imagenet':
+                self.dataset = ImageNet(root=data_root, train=train,transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor(),transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))]), download=True)
+                self.size = len(self.dataset)
+            case _:
+                raise ValueError(f'Unknown dataset {DATASET}')
     def __len__(self):
         return self.size
 
@@ -53,25 +60,6 @@ class MNISTPairDataset(Dataset):
         target_equals = 0 if x_target == y_target else 1
         return x_img, x_target, y_img, y_target, target_equals
 
-
-train_pair_dataset = MNISTPairDataset(data_root=DATA_ROOT, train=True, transform=mnist_transform)
-print(f'Train set size: {len(train_pair_dataset)}')
-test_pair_dataset = MNISTPairDataset(data_root=DATA_ROOT, train=False, transform=mnist_transform)
-print(f'Test set size: {len(test_pair_dataset)}')
-
-train_dataloader = DataLoader(
-    train_pair_dataset,
-    batch_size=BATCH_SIZE,
-    shuffle=True,
-    drop_last=True,
-    num_workers=NUM_WORKERS)
-test_dataloader = DataLoader(
-    test_pair_dataset,
-    batch_size=BATCH_SIZE,
-    shuffle=True,
-    drop_last=True,
-    num_workers=NUM_WORKERS)
-
 model = LiuDSH(code_size=CODE_SIZE).to(device)
 
 mse_loss = nn.MSELoss(reduction='none')
@@ -79,14 +67,13 @@ l1_loss = nn.L1Loss(reduction='mean')
 
 optimizer = optim.Adam(model.parameters(), lr=LR_INIT)
 
-
 class Trainer:
     def __init__(self):
         self.global_step = 0
         self.global_epoch = 0
         self.total_epochs = EPOCH
 
-        self.input_shape = (1, 28, 28)
+        self.input_shape = (channels, size, size)
         self.writer = SummaryWriter()
         self.writer.add_graph(model, self.generate_dummy_input(), verbose=True)
 
@@ -208,7 +195,24 @@ class Trainer:
 
             self.global_epoch += 1
 
-
 if __name__ == '__main__':
-    trainer = Trainer()
+    train_pair_dataset = PairDataset(data_root=DATA_ROOT, train=True)
+    print(f'Train set size: {len(train_pair_dataset)}')
+    test_pair_dataset = PairDataset(data_root=DATA_ROOT, train=False)
+    print(f'Test set size: {len(test_pair_dataset)}')
+
+    train_dataloader = DataLoader(
+        train_pair_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        drop_last=True,
+        num_workers=NUM_WORKERS)
+    test_dataloader = DataLoader(
+        test_pair_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        drop_last=True,
+        num_workers=NUM_WORKERS)
+
+    trainer = Trainer(SIZE,CHANNELS)
     trainer.train()

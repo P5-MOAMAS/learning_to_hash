@@ -82,8 +82,7 @@ class LiuDSH(nn.Module):
             nn.init.xavier_normal_(m.weight)
 
 if __name__ == '__main__':
-    # Now using CIFAR-10 input shape (3, 32, 32)
-    dummy_tensor = torch.randn((10, 3, 32, 32))  # Use 3 channels for CIFAR-10
+    dummy_tensor = torch.randn((classes, channels, size, size))  # classes, rgb or greyscale, and dimensions
     dsh = LiuDSH(code_size=11)
     print(dsh)
     print(dsh(dummy_tensor).size())
