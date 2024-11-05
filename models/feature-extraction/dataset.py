@@ -2,8 +2,11 @@ import sys
 from PIL import Image
 import pickle
 
-from torchvision.transforms import transforms
+from torchvision import datasets
+from torchvision.transforms import transforms, ToTensor, functional
 from torch.utils.data import Dataset
+
+from progressbar import progressbar
 
 class DynamicDataset(Dataset):
     def __init__(self, dataset_name, start_index: int = 1):
@@ -15,7 +18,9 @@ class DynamicDataset(Dataset):
             case "cifar-10":
                 self.max_batch = 5
                 self.func = self.__load_cifar10__
-
+            case "mnist":
+                self.max_batch = 6
+                self.func = self.__load_mnist__
             case _:
                 print("No dataset with given name!")
                 sys.exit(1)
@@ -47,14 +52,32 @@ class DynamicDataset(Dataset):
         return self.max_batch
 
 
-    def transform_images(self, dict):
+    def transform_images(self, images):
         trans = transforms.Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.ToTensor()
         ])
-        images = [Image.frombytes("RGB", (32, 32), d) for d in dict[b'data']]
-        images = [trans(i).unsqueeze(0) for i in images]
+        print("Transforming images")
+        transformed_images = []
+        for i in progressbar(images):
+            transformed_images.append(trans(i).unsqueeze(0))
+        return transformed_images
+
+
+    def bytes_to_image(self, data):
+        print("Converting bytes to image")
+        images = []
+        for d in progressbar(data):
+            images.append(Image.frombytes("RGB", (32, 32), d))
+        return images
+
+
+    def tensor_to_image(self, tensor):
+        print("Converting tensor to image")
+        images = []
+        for t in progressbar(tensor):
+            images.append(functional.to_pil_image(t))
         return images
 
 
@@ -73,4 +96,21 @@ class DynamicDataset(Dataset):
         with open("cifar-10-batches-py/data_batch_" + str(self.batch), 'rb') as fo:
             dict = pickle.load(fo, encoding='bytes')
 
-        return self.transform_images(dict)
+        return self.transform_images(self.bytes_to_image(dict[b'data']))
+
+    def __load_mnist__(self):
+        mnist = datasets.FashionMNIST(
+            root="data",
+            train=True,
+            download=True,
+            transform=ToTensor(),
+        )
+        batch_start = (self.batch - 1) * 10000
+        data = mnist.data[batch_start:batch_start + 9999]
+
+        return self.transform_images(self.tensor_to_image(data))
+
+if __name__ == "__main__":
+    dd = DynamicDataset("mnist")
+    data = dd[0]
+    print(len(data), data[0].shape)

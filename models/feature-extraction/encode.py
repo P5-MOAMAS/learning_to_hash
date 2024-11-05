@@ -122,7 +122,7 @@ class Encoder:
 def main():
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Based Image Encoder')
     parser.add_argument("-ip", "--image-path", type=str, help="path to image")
-    parser.add_argument("-d", "--dataset", type=str, help="dataset to use (cifar-10)", default="cifar-10")
+    parser.add_argument("-d", "--dataset", type=str, help="dataset to use (cifar-10), sets: cifar-10, mnist", default="cifar-10")
     parser.add_argument("-fc", "--force-cpu", action="store_true", help="force cpu")
     parser.add_argument("-fg", "--force-gpu", action="store_true", help="force gpu")
     args = parser.parse_args()
