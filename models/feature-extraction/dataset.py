@@ -5,11 +5,12 @@ import pickle
 from torchvision import datasets
 from torchvision.transforms import transforms, ToTensor, functional
 from torch.utils.data import Dataset
+import torch
 
 from progressbar import progressbar
 
 class DynamicDataset(Dataset):
-    def __init__(self, dataset_name, start_index: int = 1):
+    def __init__(self, dataset_name: str, start_index: int = 1):
         self.start_index = start_index
         self.batch = start_index
         self.name = dataset_name
@@ -26,33 +27,33 @@ class DynamicDataset(Dataset):
                 sys.exit(1)
 
 
-    def __next__(self):
+    def __next__(self) -> list | None:
         self.batch += 1
         return self.func()
 
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> list | None:
         self.batch = index
         return self.func()
 
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.max_batch - self.start_index
 
 
-    def get_name(self):
+    def get_name(self) -> str:
         return self.name
 
 
-    def get_batch_number(self):
+    def get_batch_number(self) -> int:
         return self.batch
 
 
-    def get_max_batch(self):
+    def get_max_batch(self) -> int:
         return self.max_batch
 
 
-    def transform_images(self, images):
+    def transform_images(self, images: list) -> list:
         trans = transforms.Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),
@@ -65,7 +66,7 @@ class DynamicDataset(Dataset):
         return transformed_images
 
 
-    def cifar_to_image(self, data):
+    def cifar_to_image(self, data) -> list:
         print("Converting bytes to image")
         images = []
         for d in progressbar(data):
@@ -73,15 +74,15 @@ class DynamicDataset(Dataset):
         return images
 
 
-    def mnist_to_image(self, tensor):
+    def mnist_to_image(self, data: torch.Tensor) -> list:
         print("Converting tensor to image")
         images = []
-        for t in progressbar(tensor):
+        for t in progressbar(data):
             images.append(functional.to_pil_image(t).convert("RGB"))
         return images
 
 
-    def check_bounds(self):
+    def check_bounds(self) -> None:
         if self.batch > self.max_batch:
             print("Batch number does not exist!")
             sys.exit(1)
@@ -90,7 +91,7 @@ class DynamicDataset(Dataset):
             sys.exit(1)
 
 
-    def __load_cifar10__(self):
+    def __load_cifar10__(self) -> list:
         self.check_bounds()
 
         with open("cifar-10-batches-py/data_batch_" + str(self.batch), 'rb') as fo:
@@ -98,7 +99,7 @@ class DynamicDataset(Dataset):
 
         return self.transform_images(self.cifar_to_image(dict[b'data']))
 
-    def __load_mnist__(self):
+    def __load_mnist__(self) -> list:
         mnist = datasets.FashionMNIST(
             root="data",
             train=True,
@@ -109,6 +110,7 @@ class DynamicDataset(Dataset):
         data = mnist.data[batch_start:batch_start + 10000]
 
         return self.transform_images(self.mnist_to_image(data))
+
 
 if __name__ == "__main__":
     dd = DynamicDataset("mnist")
