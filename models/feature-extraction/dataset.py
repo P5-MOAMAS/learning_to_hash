@@ -65,7 +65,7 @@ class DynamicDataset(Dataset):
         return transformed_images
 
 
-    def bytes_to_image(self, data):
+    def cifar_to_image(self, data):
         print("Converting bytes to image")
         images = []
         for d in progressbar(data):
@@ -73,11 +73,11 @@ class DynamicDataset(Dataset):
         return images
 
 
-    def tensor_to_image(self, tensor):
+    def mnist_to_image(self, tensor):
         print("Converting tensor to image")
         images = []
         for t in progressbar(tensor):
-            images.append(functional.to_pil_image(t))
+            images.append(functional.to_pil_image(t).convert("RGB"))
         return images
 
 
@@ -96,7 +96,7 @@ class DynamicDataset(Dataset):
         with open("cifar-10-batches-py/data_batch_" + str(self.batch), 'rb') as fo:
             dict = pickle.load(fo, encoding='bytes')
 
-        return self.transform_images(self.bytes_to_image(dict[b'data']))
+        return self.transform_images(self.cifar_to_image(dict[b'data']))
 
     def __load_mnist__(self):
         mnist = datasets.FashionMNIST(
@@ -106,9 +106,9 @@ class DynamicDataset(Dataset):
             transform=ToTensor(),
         )
         batch_start = (self.batch - 1) * 10000
-        data = mnist.data[batch_start:batch_start + 9999]
+        data = mnist.data[batch_start:batch_start + 10000]
 
-        return self.transform_images(self.tensor_to_image(data))
+        return self.transform_images(self.mnist_to_image(data))
 
 if __name__ == "__main__":
     dd = DynamicDataset("mnist")
