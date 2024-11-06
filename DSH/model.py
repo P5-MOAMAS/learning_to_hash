@@ -36,7 +36,7 @@ class ResBlock(nn.Module):
             nn.init.xavier_normal_(m.weight)
 
 class ResNet(nn.Module):
-    def __init__(self, num_classes: int):
+    def __init__(self, channels: int, size: int, num_classes: int):
         super().__init__()
         self.net = nn.Sequential(
             ResBlock(in_channels=3, out_channels=16),
@@ -44,7 +44,7 @@ class ResNet(nn.Module):
             ResBlock(in_channels=16, out_channels=16, stride=2),
         )
 
-        self.linear_input_size = self._get_linear_input_size((3, 32, 32))
+        self.linear_input_size = self._get_linear_input_size((channels, size, size))
         self.linear = nn.Linear(self.linear_input_size, num_classes)
         self.apply(self.init_weights)
 
@@ -66,9 +66,9 @@ class ResNet(nn.Module):
             nn.init.xavier_normal_(m.weight)
 
 class LiuDSH(nn.Module):
-    def __init__(self, code_size: int):
+    def __init__(self, code_size: int, channels: int, size: int, num_classes: int):
         super().__init__()
-        resnet = ResNet(num_classes=10)
+        resnet = ResNet(channels= channels, size=size, num_classes=num_classes)
         resnet.linear = nn.Linear(in_features=resnet.linear_input_size, out_features=code_size)
         self.net = resnet
         self.apply(self.init_weights)
@@ -76,13 +76,17 @@ class LiuDSH(nn.Module):
     def forward(self, x):
         return self.net(x)
 
+    def create_dummy_tensor(self):
+        # Create a dummy tensor based on the initialized values
+        return torch.randn((self.num_classes, self.channels, self.size, self.size))
+
     @staticmethod
     def init_weights(m):
         if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
             nn.init.xavier_normal_(m.weight)
 
 if __name__ == '__main__':
-    dummy_tensor = torch.randn((classes, channels, size, size))  # classes, rgb or greyscale, and dimensions
+    dummy_tensor = LiuDSH.create_dummy_tensor()
     dsh = LiuDSH(code_size=11)
     print(dsh)
     print(dsh(dummy_tensor).size())
