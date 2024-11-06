@@ -1,7 +1,9 @@
-/feature-extraction/imagenet-vgg16.pth
-/feature-extraction/venv/
-/feature-extraction/autoencoder.egg-info/
+/models/metrics/sim_matrix
+/models/feature-extraction/imagenet-vgg16.pth
+*.egg-info
+__pycache__
+venv
+
 features/*
-ITQ/hashing/deep_features/cifar-10-batches-py/
+cifar-10-batches-py/
 .idea
-/ITQ/hashing/deep_features/*
