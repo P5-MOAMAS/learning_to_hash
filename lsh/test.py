@@ -3,7 +3,7 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 import numpy as np
 from tqdm import tqdm
-from LSH_v4 import LSH
+from lsh.LSH import LSH
 
 
 # Set the number of images to use
