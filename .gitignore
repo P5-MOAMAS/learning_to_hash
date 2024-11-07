@@ -7,3 +7,4 @@ venv
 features/*
 cifar-10-batches-py/
 .idea
+lsh
