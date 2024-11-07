@@ -7,6 +7,7 @@ from torchvision.transforms import transforms, ToTensor, functional
 from torch.utils.data import Dataset
 import torch
 
+from image_net_loader import ImageNetLoader
 from progressbar import progressbar
 
 class DynamicDataset(Dataset):
@@ -22,6 +23,9 @@ class DynamicDataset(Dataset):
             case "mnist":
                 self.max_batch = 6
                 self.func = self.__load_mnist__
+            case "image-net":
+                self.max_batch = 55
+                self.func = self.__load_image_net__
             case _:
                 print("No dataset with given name!")
                 sys.exit(1)
@@ -99,6 +103,7 @@ class DynamicDataset(Dataset):
 
         return self.transform_images(self.cifar_to_image(dict[b'data']))
 
+
     def __load_mnist__(self) -> list:
         mnist = datasets.FashionMNIST(
             root="data",
@@ -112,7 +117,20 @@ class DynamicDataset(Dataset):
         return self.transform_images(self.mnist_to_image(data))
 
 
+    def __load_image_net__(self):
+        self.check_bounds()
+        print("Loading ImageNet dataset")
+        loader = ImageNetLoader()
+        trans = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor()
+        ])
+        batch_start = (self.batch - 1) * 10000
+        batch_size = 10000 if self.batch + 1 != self.max_batch else 4546
+        return loader.load_images(batch_start, batch_start + batch_size, trans)
+
 if __name__ == "__main__":
-    dd = DynamicDataset("mnist")
-    data = dd[0]
-    print(len(data), data[0].shape)
+    dd = DynamicDataset("image-net")
+    data = dd[54]
+    print(len(data))
