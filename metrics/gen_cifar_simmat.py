@@ -5,7 +5,7 @@ class CifarSimilarityMatrix:
     @staticmethod
     def load():
         import pickle
-        with open("metrics-framework/sim_matrix", 'rb') as fo:
+        with open("metrics/sim_matrix", 'rb') as fo:
             matrix = pickle.load(fo, encoding='bytes')
 
         return CifarSimilarityMatrix(matrix)
@@ -26,7 +26,7 @@ class CifarSimilarityMatrix:
 
     def save(self):
         import pickle
-        with open("metrics-framework/sim_matrix", 'wb') as file:
+        with open("metrics/sim_matrix", 'wb') as file:
             pickle.dump(self.matrix, file)
 
     def __init__(self, matrix: list[list[int]]):
