@@ -1,17 +1,15 @@
-import gc
-import os
-import sys
-
+# External dependencies
 import argparse
 import torch
 from torch import nn
-from torchvision.transforms import transforms
-from PIL import Image
+import sys
+import os
+import gc
 
-import vgg
-from dataset import DynamicDataset
-
-from ..util.progressbar import progressbar
+# Internal dependencies
+from feature_extraction.vgg import get_configs, VGGAutoEncoder
+from util.progressbar import progressbar
+from feature_extraction.dataset import DynamicDataset
 
 
 class Encoder:
@@ -35,6 +33,10 @@ class Encoder:
     def encode_dataset(self, dataset: DynamicDataset):
         for i in range(dataset.get_batch_number(), dataset.get_max_batch() + 1):
             batch = dataset[i]
+
+            if (batch == None):
+                sys.exit("Error reading dataset " + dataset.get_name())
+
             print("Loaded batch " + str(dataset.get_batch_number()) + "/" + str(dataset.get_max_batch()) + " of " + dataset.get_name())
             codes = self.encode_batch(batch)
             print("Finished encoding for batch " + str(dataset.get_batch_number()) + " of " + dataset.get_name() + " structure: " + str(codes.shape))
@@ -71,10 +73,10 @@ class Encoder:
 
 
     def load_model(self):
-        model = vgg.VGGAutoEncoder(vgg.get_configs())
+        model = VGGAutoEncoder(get_configs())
         model = nn.DataParallel(model).to(self.device)
 
-        self.load_dict("models/feature-extraction/imagenet-vgg16.pth", model)
+        self.load_dict("saved_models/imagenet-vgg16.pth", model)
         model.eval()
 
         return model
@@ -100,26 +102,8 @@ class Encoder:
             code = self.model.module.encoder(img).cpu()
         return code
 
-
-    def encode_image(self, image_path: str):
-        model = self.load_model(self.device)
-
-        # Transform image to match model input size
-        trans = transforms.Compose([
-                        transforms.Resize(256),
-                        transforms.CenterCrop(224),
-                        transforms.ToTensor()
-                      ])
-        img = Image.open(image_path).convert("RGB")
-        img = trans(img).unsqueeze(0).to(self.device)
-        code = self.encode(model, img)
-
-        return code
-
-
-def main():
+if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Based Image Encoder')
-    parser.add_argument("-ip", "--image-path", type=str, help="path to image")
     parser.add_argument("-d", "--dataset", type=str, help="dataset to use (cifar-10), sets: cifar-10, mnist", default="cifar-10")
     parser.add_argument("-fc", "--force-cpu", action="store_true", help="force cpu")
     parser.add_argument("-fg", "--force-gpu", action="store_true", help="force gpu")
@@ -137,12 +121,7 @@ def main():
 
     encoder = Encoder(args.device)
 
-    if args.image_path:
-        result = encoder.encode_image(args.image_path)
-        print("Images encoded: " + str(len(result)))
-    elif args.dataset:
+    if args.dataset:
         encoder.encode_batches_and_save(args.dataset)
-
-
-if __name__ == '__main__':
-    main()
+    else:
+        sys.exit("Specify a dataset with -d <dataset name>")
