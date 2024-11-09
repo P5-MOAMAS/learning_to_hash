@@ -2,7 +2,7 @@ from PIL import Image
 
 from torchvision.transforms import transforms
 
-from progressbar import progressbar
+from util.progressbar import progressbar
 
 
 class ImageNetLoader:

@@ -7,8 +7,8 @@ from torchvision.transforms import transforms, ToTensor, functional
 from torch.utils.data import Dataset
 import torch
 
-from image_net_loader import ImageNetLoader
-from progressbar import progressbar
+from feature_extraction.image_net_loader import ImageNetLoader
+from util.progressbar import progressbar
 
 class DynamicDataset(Dataset):
     def __init__(self, dataset_name: str, start_index: int = 1):
