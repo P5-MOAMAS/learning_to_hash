@@ -1,5 +1,5 @@
 /metrics/sim_matrix
-/saved_models/imagenet-vgg16.pth
+/saved_models
 /cifar-10-batches-py/
 /features/*
 
@@ -7,7 +7,5 @@
 __pycache__
 venv
 
-features/*
-cifar-10-batches-py/
 .idea
 lsh
