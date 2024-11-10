@@ -3,7 +3,6 @@ import sys
 from typing import Callable
 
 import numpy as np
-from util.progressbar import progressbar
 
 
 class Database:
@@ -90,10 +89,11 @@ returns - A Database containing all generated hash codes
 """
 def pre_gen_hash_codes(model_query: Callable, dataset: np.ndarray, db: Database | None = None) -> Database:
     db = Database() if db is None else db
-    print("-" * 19, "Generating hash codes", "-" * 19)
-    for index in progressbar(range(len(dataset))):
-        key = model_query(dataset[index])
+    for index, el in enumerate(dataset):
+        print("Generating hash codes:", index + 1, "out of", len(dataset), "   ", sep=" ", end="\r") # Fuck progress bar
+        key = model_query(el)
         db[key] = index
+    print()
 
     return db
 
