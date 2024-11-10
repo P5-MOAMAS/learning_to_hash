@@ -1,10 +1,11 @@
 from os import sep
+import pickle
 import sys
 import psutil
 import torch
 import numpy as np
-from dataloader import DataLoader
 from hash_lookup import pre_gen_hash_codes
+from metrics.gen_cifar_simmat import SimilarityMatrix
 
 
 class FeatureLoader:
@@ -24,18 +25,11 @@ class FeatureLoader:
                 print("Unrecognized feature set!")
                 sys.exit(1)
 
-    def get_training_features(self):
-        return self.training
-    
-    def get_validation_features(self):
-        return self.validation
-    
-    def get_test_features(self):
-        return self.test
-
 
     def __init_cifar__(self):
-        total = []
+        # Get all features, from all images in cifar
+        image_features = []
+        image_labels = []
         for i in range(1, 6):
             name = "features/cifar-10-" + str(i) + "-features"
 
@@ -47,32 +41,56 @@ class FeatureLoader:
             if data is None:
                 print("No data was retrieved from '" + name + "'")
                 sys.exit(1)
-            total += data
+            image_features += data
+        
+        # Get all labels in cifar
+        fp = "cifar-10-batches-py/"
+        fileNames = []
+        for i in range(1, 6):
+            fileNames.append(fp + "data_batch_" + str(i))
+
+        for name in fileNames:
+            labels = unpickle(name)[b'labels']
+            image_labels += labels
+
+        if (len(image_features) != len(image_labels)):
+            raise Exception("Not as many labels as there are images")
+
+        idx_feature_label = []
+        for id, feature_label in enumerate(zip(image_features, image_labels)):
+            feature, label = feature_label
+            idx_feature_label.append((id, feature, label))
+
 
         # Arbitrary slicing of array
+        slice_len = len(idx_feature_label) // 3
+        self.training = idx_feature_label[0:slice_len]
+        self.test = idx_feature_label[slice_len:slice_len * 2]
+        self.validation = idx_feature_label[slice_len * 2:]
 
-        slice_len = len(total) // 3
-        self.training = total[0:slice_len]
-        self.test = total[slice_len:slice_len * 2]
-        self.validation = total[slice_len * 2:]
 
-
-def gen_key(some):
-    return 0
+def unpickle(file):
+    with open(file, 'rb') as fo:
+        d = pickle.load(fo, encoding='bytes')
+    return d
 
 
 if __name__ == '__main__':
+    def gen_key(some):
+        return 0
+
     process = psutil.Process()
     mem_before = process.memory_info().rss
-    
+
     fl = FeatureLoader("cifar-10")
-    print("Training:", len(fl.get_training_features()), sep=" ")
-    print("Validation:", len(fl.get_validation_features()), sep=" ")
-    print("Test:", len(fl.get_test_features()), sep=" ")
+    if fl.training == None or fl.validation == None or fl.test == None:
+        raise Exception("One of the sets were null")
 
-    d = pre_gen_hash_codes(gen_key, fl.get_training_features())
+    print("Training:", len(fl.training), sep=" ")
+    print("Validation:", len(fl.validation), sep=" ")
+    print("Test:", len(fl.test), sep=" ")
 
-    print(d[0])
+    d = pre_gen_hash_codes(gen_key, fl.training) # Incorrect function declaration, works with this
 
     mem_after = process.memory_info().rss
     print("Before: " + str(mem_before))

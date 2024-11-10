@@ -87,11 +87,13 @@ db: Database            - An optional data set that can be extended with new cod
 
 returns - A Database containing all generated hash codes
 """
-def pre_gen_hash_codes(model_query: Callable, dataset: np.ndarray, db: Database | None = None) -> Database:
+def pre_gen_hash_codes(model_query: Callable, dataset: list[tuple[int, list, int]], db: Database | None = None) -> Database:
     db = Database() if db is None else db
-    for index, el in enumerate(dataset):
-        print("Generating hash codes:", index + 1, "out of", len(dataset), "   ", sep=" ", end="\r") # Fuck progress bar
-        key = model_query(el)
+
+    for count, e in enumerate(dataset):
+        index, feature, label = e
+        print("Generating hash codes:", count + 1, "out of", len(dataset), "   ", sep=" ", end="\r") # Fuck progress bar
+        key = model_query(feature)
         db[key] = index
     print()
 
