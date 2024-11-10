@@ -3,7 +3,7 @@ import sys
 from typing import Callable
 
 import numpy as np
-from progressbar.progressbar import progressbar
+from util.progressbar import progressbar
 
 
 class Database:
@@ -88,7 +88,7 @@ db: Database            - An optional data set that can be extended with new cod
 
 returns - A Database containing all generated hash codes
 """
-def pre_gen_hash_codes(model_query: Callable, dataset: np.ndarray, db: Database = None) -> Database:
+def pre_gen_hash_codes(model_query: Callable, dataset: np.ndarray, db: Database | None = None) -> Database:
     db = Database() if db is None else db
     print("-" * 19, "Generating hash codes", "-" * 19)
     for index in progressbar(range(len(dataset))):
