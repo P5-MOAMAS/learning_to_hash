@@ -1,5 +1,8 @@
 import sys
+from typing import Callable
 import numpy as np
+import torch
+
 
 class DataLoader:
     def __iter__(self):
@@ -20,8 +23,7 @@ class DataLoader:
 
     def get_data(self, path: str):
         with open(path, 'rb') as f:
-            import pickle
-            data = pickle.load(f)
+            data = torch.load(f)
 
         data = [np.array(i) for i in data]
 
