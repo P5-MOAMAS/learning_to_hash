@@ -19,3 +19,6 @@ pip install -e ./util/progressbar
 pip install -e ./metrics-framework
 pip install -e .
 ```
+
+# Imagenet
+Link to data used: [kaggle](https://www.kaggle.com/c/imagenet-object-localization-challenge/overview)
