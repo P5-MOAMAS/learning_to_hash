@@ -70,22 +70,23 @@ class LSH:
 
     def query(self, query_feature):
         """
-        Compute and return the hash codes for a given query feature across all hash tables.
+        Compute and return a single combined hash code for a given query feature.
 
         Parameters:
             query_feature (np.ndarray): The feature vector of the query image (1D array, length: any feature length).
 
         Returns:
-            list of tuples: A list of hash codes, where each hash code is a tuple of bits for a specific table.
+            np.ndarray: A single combined hash code as an array of bits.
         """
         # Reduce the dimensionality of the query feature
         query_feature_reduced = self.pca.transform(query_feature.reshape(1, -1))
 
-        # Compute the hash code for each table and return the list of hash codes
-        hash_codes = []
+        # Concatenate hash bits from all tables to form a single hash code
+        combined_hash_code = []
         for t in range(self.num_tables):
-            # Compute the hash key for the query feature in table t
-            hash_key = tuple(hf(query_feature_reduced[0]) for hf in self.hash_functions[t])
-            hash_codes.append(hash_key)
+            # Compute the hash key for the query feature in table t and add it to the combined hash code
+            hash_key = [hf(query_feature_reduced[0]) for hf in self.hash_functions[t]]
+            combined_hash_code.extend(hash_key)
 
-        return hash_codes
+        # Convert the combined hash code to a numpy array for easy handling
+        return np.array(combined_hash_code)

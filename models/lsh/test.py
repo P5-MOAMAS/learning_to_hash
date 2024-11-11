@@ -2,9 +2,8 @@ import torchvision
 from torchvision import transforms
 from torch.utils.data import DataLoader
 import numpy as np
+from Lsh import LSH  # Assume the LSH class is saved as Lsh.py
 from tqdm import tqdm
-from lsh.LSH import LSH
-
 
 # Set the number of images to use
 num_images_to_use = 50000
@@ -12,7 +11,7 @@ num_images_to_use = 50000
 # Define transformation: Convert to tensor and normalize
 transform = transforms.Compose(
     [
-        transforms.Resize((32, 32)),
+        transforms.Resize((32, 32)),  # Ensure images are of consistent size
         transforms.ToTensor(),
     ]
 )
@@ -22,10 +21,10 @@ cifar10_dataset = torchvision.datasets.CIFAR10(
     root="./data", train=True, download=True, transform=transform
 )
 
-# Set the batch size
+# Set the batch size for loading images
 batch_size = 256
 
-# Adjust num_images_to_use to avoid small last batch
+# Adjust num_images_to_use to avoid a small last batch
 num_images_to_use = (num_images_to_use // batch_size) * batch_size
 print(f"Using {num_images_to_use} images for LSH.")
 
@@ -36,50 +35,43 @@ train_loader = DataLoader(cifar10_dataset, batch_size=batch_size, shuffle=False)
 images = []
 labels = []
 
-# Iterate over the dataset to collect images and labels in batches
+# Collect images and labels in batches
 print("Loading images...")
 for image_batch, label_batch in tqdm(train_loader, desc="Loading data"):
     images.extend(image_batch.numpy().transpose(0, 2, 3, 1))
-    labels.extend(label_batch.numpy())
 
-    # Check if we've reached the desired number of images
+    # Stop when we have the required number of images
     if len(images) >= num_images_to_use:
-        images = images[:num_images_to_use]  # Trim to the required number
-        labels = labels[:num_images_to_use]  # Trim to the required number
+        images = images[:num_images_to_use]
         break
 
-# Convert the lists of images and labels to numpy arrays
+# Convert lists to numpy arrays
 images = np.array(images)
-labels = np.array(labels)
 print(f"Loaded {len(images)} images.")
 
-# --- New Code to Remove Query Image ---
-# Select the query image and label
-query_image = images[0]
-query_label = labels[0]
+# Flatten the images for compatibility with LSH (each image as a 1D feature vector)
+images = images.reshape(images.shape[0], -1)
 
-# Remove the query image and label from the dataset
-images = np.delete(images, 0, axis=0)
-labels = np.delete(labels, 0, axis=0)
-print("Removed the query image from the dataset.")
-# ---------------------------------------
+# Set LSH parameters
+num_tables = 5
+num_bits_per_table = 64
+pca_components = 50
 
-# Parameters to customize
-num_tables = 5  # Number of hash tables
-num_bits_per_table = 10  # Number of hash functions (bits) per table
-pca_components = 50  # Number of PCA components
-
-# Initialize and run the LSH
+# Initialize LSH with the images data
 image_lsh = LSH(
     images,
-    labels,
     num_tables=num_tables,
     num_bits_per_table=num_bits_per_table,
     pca_components=pca_components,
 )
-# Query example
-k = 10  # Number of nearest neighbors to return
-similar_indices = image_lsh.query(query_image, k)
 
-# Visualize the query image and similar images
-image_lsh.visualize_images(similar_indices, query_image=query_image)
+# Select a query image and remove it from the dataset
+query_image = images[0]
+query_label = labels[0]
+images = np.delete(images, 0, axis=0)
+labels = np.delete(labels, 0, axis=0)
+print("Removed the query image from the dataset.")
+
+# Query LSH to find hash codes for the query image
+query_hash_codes = image_lsh.query(query_image)
+print("Hash codes for query image:", query_hash_codes)
