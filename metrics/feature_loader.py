@@ -5,7 +5,6 @@ import psutil
 import torch
 import numpy as np
 from hash_lookup import pre_gen_hash_codes
-from metrics.gen_cifar_simmat import SimilarityMatrix
 
 
 class FeatureLoader:
@@ -64,6 +63,7 @@ class FeatureLoader:
 
         # Arbitrary slicing of array
         slice_len = len(idx_feature_label) // 3
+
         self.training = idx_feature_label[0:slice_len]
         self.test = idx_feature_label[slice_len:slice_len * 2]
         self.validation = idx_feature_label[slice_len * 2:]

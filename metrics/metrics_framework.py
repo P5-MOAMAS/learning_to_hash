@@ -15,12 +15,18 @@ def calculate_metrics(function: Callable, dataset: list[tuple[int, list, int]], 
     """
     TODO: Brug hash_lookup og pre_gen_hash_codes til at skabe db'en. Signaturen er ændret så den passer bedre ind.
     Db'en generere en list per query, så brug den til fx, udregning af precision osv.
-    """
+    DB kommer ikke ud sorteret!!! Så sorter query således 'tætteste' kommer først.
+
     db = pre_gen_hash_codes(function, dataset)
     sim_matrix = SimilarityMatrix.create_matrix(dataset)
 
+    mAP = calc_mean_average_precision(sim_matrix, q, q_results)
+    precision_recall = calculate_precision_recall_curve(sim_matrix)
+
     for id, feature, label in dataset: # ???? Vel ikke på alting? Hvor meget data til det her?
         pass
+    """
+    pass
 
 def calculate_recall(sim_matrix: SimilarityMatrix, id: int, image_ids: list[int]):
     related = sim_matrix.get_related(id)
