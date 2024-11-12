@@ -37,7 +37,8 @@ def calculate_metrics(function: Callable, dataset: list[tuple[int, list, int]], 
     # Calculate mean average precision
     mAP = sum(aps) / len(aps)
 
-    
+    # Temp print of mAP
+    print("mAP: ", mAP)
     pass
 
 
