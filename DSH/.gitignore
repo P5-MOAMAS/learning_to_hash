@@ -1,0 +1,16 @@
+## project_specific
+data_out/
+runs/
+
+## intellij
+.idea/
+*.iml
+
+## python
+__pycache__/
+venv/
+
+## ctags
+tags
+tags.lock
+tags.temp
