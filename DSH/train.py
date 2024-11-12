@@ -6,7 +6,7 @@ import random
 import torch
 from torch import nn
 from torch import optim
-from torchvision.datasets.mnist import MNIST
+from torchvision.datasets import MNIST, ImageNet, CIFAR10
 from torch.utils.data import DataLoader, Dataset
 import torchvision.transforms as transforms
 from torch.utils.tensorboard import SummaryWriter
@@ -88,7 +88,21 @@ class PairDataset(Dataset):
         return x_img, x_target, y_img, y_target, target_equals,
 
 class Trainer:
-    def __init__(self):
+    """
+            Handles model training, evaluation, and logging.
+
+            Args:
+                model: The model to train.
+                train_dataloader: DataLoader for training data.
+                test_dataloader: DataLoader for testing data.
+                dataset (PairDataset): The dataset object containing dataset parameters.
+                code_size (int): Size of the hash code for embedding.
+                epochs (int): Number of training epochs.
+            """
+    def __init__(self, model, train_dataloader, test_dataloader, dataset: PairDataset, code_size: int, epochs: int):
+        self.model = model
+        self.train_dataloader = train_dataloader
+        self.test_dataloader = test_dataloader
         self.global_step = 0
         self.global_epoch = 0
         self.total_epochs = epochs
@@ -213,21 +227,24 @@ class Trainer:
 
             # Tensor format
             hash_vals = torch.cat(hash_embeddings).numpy().astype(int)
-            hash_vals = np.packbits(hash_vals, axis=-1).squeeze()  # to uint8
             targets = torch.cat(test_targets).numpy().astype(int)
 
+            # Use a dictionary format for debugging
             hashdict = defaultdict(list)
             for target_class, hash_value in zip(targets, hash_vals):
-                hashdict[target_class].append(f'{hash_value:#04x}')  # ex) 15 -> 0x0f
+                binary_str =''.join(map(str, hash_value))
+                hashdict[target_class].append(binary_str)
 
-            result_texts = []  # TODO: debug
-            for target_class in sorted(hashdict.keys()):
-                for hashval in hashdict[target_class]:
-                    result_texts.append(f'class: {target_class:02d} - {hashval}')
+            result_texts = []
+            for target_class in sorted(hashdict.keys()):  # Iterate over sorted class labels
+                for binary_str in hashdict[target_class]:  # Iterate over the binary hashes
+                    result_texts.append(f'class: {target_class:02d} - {binary_str}') # Prepare the text to display
+                    # Log the binary hash value to TensorBoard for each class
                     self.writer.add_text(
                         f'e{self.global_epoch}_hashvals/{target_class:02d}',
-                        hashval, global_step=self.global_step)
+                        binary_str, global_step=self.global_step)
 
+            # Print the result texts
             result_text = '\n'.join(result_texts)
             print(result_text)
 

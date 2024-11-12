@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -59,7 +60,7 @@ class ResNet(nn.Module):
         super().__init__()
         # Define the layers of the ResNet, made up of residual blocks
         self.net = nn.Sequential(
-            ResBlock(in_channels=3, out_channels=16),
+            ResBlock(in_channels=channels, out_channels=16),
             ResBlock(in_channels=16, out_channels=16),
             ResBlock(in_channels=16, out_channels=16, stride=2),
         )
@@ -119,6 +120,14 @@ class LiuDSH(nn.Module):
     def init_weights(m):
         if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
             nn.init.xavier_normal_(m.weight)
+
+    def query_image(self, image: torch.Tensor):
+        "Computes and returns a binary hashcode for 1 image"
+        self.eval()
+        with torch.no_grad():
+            embedding=self.forward(image.unsqueeze(0))
+            binary_hash = torch.round(embedding.clamp(-1,1)*0.5+0.5).cpu().int()
+            return binary_hash
 
 if __name__ == '__main__':
     # Create a dummy tensor to simulate the input data
