@@ -164,6 +164,7 @@ class SpectralHashing:
             data = data.numpy()
 
         # Transform data using PCA and adjust by the minimum values
+        data = data.reshape(1, -1)
         data = self.pca.transform(data) - self.mn.reshape(1, -1)
 
         # Initialize the hash code matrix
