@@ -23,6 +23,25 @@ class Database:
                 return i
         return None
 
+    def get_images_with_distance_sorted(self, query, max_distance):
+        dist_to_indexes = [None] * (max_distance + 1)
+
+        for i, code in enumerate(self.hashcodes):
+            distance = self.hamming_distance(query, code)
+            if distance <= max_distance:
+                if distance in dist_to_indexes:
+                    dist_to_indexes[distance].append(i)
+                else:
+                    dist_to_indexes[distance] = [i]
+
+        sorted = []
+        for xs in dist_to_indexes:
+            if xs == None:
+                continue
+            sorted += xs
+
+        return sorted
+
 
     def __setitem__(self, key, value) -> None:
         index = self.get_hash_code_index(key)
