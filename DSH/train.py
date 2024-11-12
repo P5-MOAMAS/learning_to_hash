@@ -18,7 +18,7 @@ LR_INIT = 3e-4
 BATCH_SIZE = 128
 NUM_WORKERS = 8
 MARGIN = 5
-ALPHA = 0.01  # TODO: adjust
+ALPHA = 0.01
 
 # check for cuda availability and set device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
