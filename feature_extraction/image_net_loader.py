@@ -1,7 +1,5 @@
 from PIL import Image
 
-from torchvision.transforms import transforms
-
 from util.progressbar import progressbar
 
 
@@ -29,16 +27,13 @@ class ImageNetLoader:
                 self.target_types[id] = types
 
 
-    def load_images(self, start, end, trans = None):
+    def load_images(self, start, end):
         if len(self.paths) == 0:
             self.__load_locations__()
         images = []
         print("Loading images...")
         for i in progressbar(range(start, end)):
-            image = Image.open("data/ImageNet/ILSVRC/Data/CLS-LOC/train/" + self.paths[i] + ".JPEG").convert('RGB')
-            if trans is not None:
-                image = trans(image)
-            images.append(image)
+            images.append(Image.open("data/ImageNet/ILSVRC/Data/CLS-LOC/train/" + self.paths[i] + ".JPEG").convert('RGB'))
         return images
 
     def load_targets(self, start, end):
@@ -55,11 +50,6 @@ class ImageNetLoader:
 
 if __name__ == '__main__':
     loader = ImageNetLoader()
-    trans = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor()
-    ])
-    images = loader.load_images(0, 10, trans)
+    images = loader.load_images(0, 10)
 
     print(len(images), images[0].shape)
