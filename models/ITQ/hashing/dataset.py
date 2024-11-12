@@ -1,8 +1,67 @@
 import os
-import zipfile
 import torch
 import numpy as np
 from scipy.io import loadmat
+
+def load_imagenet_deep(root):
+    """
+    Load ImageNet with deep features extracted using a pre-trained model (e.g., VGG16).
+
+    Parameters:
+        root: str, the directory where ImageNet deep feature files are stored.
+
+    Returns:
+        query_data: tuple[array], (features, labels)
+        database_data: tuple[array], (features, labels)
+    """
+    all_features = []
+    all_labels = []
+
+    #s
+    for class_dir in sorted(os.listdir(root)):
+        class_path = os.path.join(root, class_dir)
+        if not os.path.isdir(class_path):
+            continue
+
+        class_label = int(class_dir)
+        for feature_file in sorted(os.listdir(class_path)):
+            feature_path = os.path.join(class_path, feature_file)
+
+            try:
+                features = torch.load(feature_path, map_location='cpu')
+            except Exception as e:
+                raise RuntimeError(f"Failed to load {feature_path}. Error: {str(e)}")
+
+            if isinstance(features, torch.Tensor):
+                all_features.append(features)
+                all_labels.append(class_label)
+            else:
+                print(f"Warning: Expected a tensor but got {type(features)} from {feature_file}")
+
+    if not all_features:
+        raise ValueError("No features collected.")
+
+    features = torch.cat(all_features, dim=0).numpy()
+    labels = np.array(all_labels)
+
+
+    query_index, database_index = [], []
+
+    unique_labels = np.unique(labels)
+    for label in unique_labels:
+        label_idx = np.flatnonzero(labels == label)
+        label_idx = np.random.permutation(label_idx)
+
+
+        query_index.extend(label_idx[:50])  # Adjust the number of query examples per class
+        database_index.extend(label_idx[50:])  # Remaining for database
+
+    # Extract query and database data
+    query_data = (features[query_index], labels[query_index])
+    database_data = (features[database_index], labels[database_index])
+
+    return query_data, database_data
+
 
 def load_cifar10_deep(root):
     """
