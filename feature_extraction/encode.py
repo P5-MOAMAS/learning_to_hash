@@ -5,6 +5,7 @@ from torch import nn
 import sys
 import os
 import gc
+import time
 
 # Internal dependencies
 from feature_extraction.vgg import get_configs, VGGAutoEncoder
@@ -62,9 +63,14 @@ class Encoder:
 
     def encode_batches_and_save(self, dataset_name: str):
         dataset = DynamicDataset(dataset_name)
+        start_time = time.time()
         for codes in self.encode_dataset(dataset):
             os.makedirs("features", exist_ok=True)
             file = "features/" + str(dataset_name) + "-" + str(dataset.get_batch_number()) + "-features"
+            minutes, seconds = divmod(time.time() - start_time, 60)
+            hours, minutes = divmod(minutes, 60)
+            elapsed_time = f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
+            print("Total time elapsed: " + elapsed_time)
             print("Saving features to " + file)
             torch.save(codes, file)
             print("Features successfully saved!\n")
@@ -104,7 +110,7 @@ class Encoder:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Based Image Encoder')
-    parser.add_argument("-d", "--dataset", type=str, help="dataset to use (cifar-10), sets: cifar-10, mnist", default="cifar-10")
+    parser.add_argument("-d", "--dataset", type=str, help="dataset to use (cifar-10), sets: cifar-10, mnist, image-net", default="cifar-10")
     parser.add_argument("-fc", "--force-cpu", action="store_true", help="force cpu")
     parser.add_argument("-fg", "--force-gpu", action="store_true", help="force gpu")
     args = parser.parse_args()
