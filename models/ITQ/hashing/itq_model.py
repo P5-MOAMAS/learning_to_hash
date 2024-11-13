@@ -85,6 +85,13 @@ class ITQ(Model):
         B = sign(Z)
         return B
 
+    def encode_single(self, query_feature):
+        V = self._project(query_feature.reshape(1, -1))
+        Z = np.matmul(V, self._R)
+        B = sign(Z).astype(int)
+        B[B == -1] = 0
+        return B
+
     def save_model(self, filename):
         """Save the model parameters to a file."""
         torch.save({
@@ -106,7 +113,7 @@ class ITQ(Model):
         self.pca.explained_variance_ = checkpoint['pca_explained_variance']
         self._project = lambda X: self.pca.transform(X)
 
-    def query_image(self, image):
+    def query_image(self, features):
         """Convert a query image to a binary tensor using ITQ.
 
         # Parameters:
@@ -116,8 +123,8 @@ class ITQ(Model):
             binary_tensor: torch.Tensor.
                 The binary tensor representation of the image.
         """
-        if isinstance(image, torch.Tensor):
-            image = image.numpy()
-        binary_code = self.encode(image.reshape(1, -1))[0]
+        if isinstance(features, torch.Tensor):
+            features = features.numpy()
+        binary_code = self.encode(features.reshape(1, -1))[0]
         binary_tensor = torch.tensor((binary_code > 0).astype(int), dtype=torch.int32)
         return binary_tensor
