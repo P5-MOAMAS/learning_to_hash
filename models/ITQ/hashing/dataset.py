@@ -15,53 +15,114 @@ def load_imagenet_deep(root):
         database_data: tuple[array], (features, labels)
     """
     all_features = []
-    all_labels = []
 
-    #s
-    for class_dir in sorted(os.listdir(root)):
-        class_path = os.path.join(root, class_dir)
-        if not os.path.isdir(class_path):
-            continue
+    for i in range(1, 55):
+        batch_filename = f'image-net-{i}-features'
+        batch_path = os.path.join(root, batch_filename)
 
-        class_label = int(class_dir)
-        for feature_file in sorted(os.listdir(class_path)):
-            feature_path = os.path.join(class_path, feature_file)
+        if not os.path.exists(batch_path):
+            raise FileNotFoundError(f"File not found: {batch_path}")
 
-            try:
-                features = torch.load(feature_path, map_location='cpu')
-            except Exception as e:
-                raise RuntimeError(f"Failed to load {feature_path}. Error: {str(e)}")
+        try:
+            # Load features
+            features = torch.load(batch_path, map_location='cpu')
+        except Exception as e:
+            raise RuntimeError(f"Failed to load {batch_path}. Error: {str(e)}")
 
-            if isinstance(features, torch.Tensor):
-                all_features.append(features)
-                all_labels.append(class_label)
-            else:
-                print(f"Warning: Expected a tensor but got {type(features)} from {feature_file}")
+            # Check if features are in tensor format, if yes append to all_features
+        if isinstance(features, torch.Tensor):
+            all_features.append(features)
+        else:
+            print(f"Warning: Expected a tensor but got {type(features)} from {batch_filename}")
 
+            # Check if not all_features have been collected
+        if not all_features:
+            raise ValueError("No features collected.")
+
+        features = torch.cat(all_features, dim=0).numpy()
+
+        num_samples = features.shape[0]  # Number of samples in `features`
+        num_classes = 1000
+
+        # Adjusted label array to match `features`
+        all_labels = np.repeat(np.arange(num_classes), num_samples // num_classes)
+
+        # TODO: check the shapes
+        assert features.shape == (10000, 512), f"Expected shape (50000, 512) but got {features.shape}"
+        assert len(all_labels) == 10000, f"Expected 50000 labels but got {len(all_labels)}"
+
+        # Indices for query and database sets
+        query_index, database_index = [], []
+
+        for digit in range(1000):
+            digit_idx = np.flatnonzero(all_labels == digit)
+            digit_idx = np.random.permutation(digit_idx)
+
+            if len(digit_idx) < 1000:
+                raise ValueError(f"Not enough samples for class {digit}. Got only {len(digit_idx)} samples.")
+
+            # Split the data into query and database - Adjust these numbers according to the desired split
+            query_index.extend(digit_idx[:1000])  # 100 per class for the query
+            database_index.extend(digit_idx[1000:])  # remaining for database
+
+        # Extract query and database data
+        query_data = (features[query_index], all_labels[query_index])
+        database_data = (features[database_index], all_labels[database_index])
+
+        return query_data, database_data
+
+def load_mnist_deep(root):
+    all_features = []
+
+    # Load features from each batch (1-5)
+    for i in range(1, 7):
+        batch_filename = f'cifar-10-{i}-features'
+        batch_path = os.path.join(root, batch_filename)
+
+        if not os.path.exists(batch_path):
+            raise FileNotFoundError(f"File not found: {batch_path}")
+
+        try:
+            # Load features
+            features = torch.load(batch_path, map_location='cpu')
+        except Exception as e:
+            raise RuntimeError(f"Failed to load {batch_path}. Error: {str(e)}")
+
+        # Check if features are in tensor format, if yes append to all_features
+        if isinstance(features, torch.Tensor):
+            all_features.append(features)
+        else:
+            print(f"Warning: Expected a tensor but got {type(features)} from {batch_filename}")
+
+    # Check if not all_features have been collected
     if not all_features:
         raise ValueError("No features collected.")
 
-    features = torch.cat(all_features, dim=0).numpy()
-    labels = np.array(all_labels)
+    features = torch.cat(all_features, dim=0).numpy()  # Shape should be (50000, 25088)
 
+    # Create labels corresponding to the collected features
+    all_labels = np.repeat(np.arange(10), 5000)  # 10 classes with 5000 samples each
 
+    # Check the shapes
+    assert features.shape == (50000, 512), f"Expected shape (50000, 512) but got {features.shape}"
+    assert len(all_labels) == 50000, f"Expected 50000 labels but got {len(all_labels)}"
+
+    # Indices for query and database sets
     query_index, database_index = [], []
 
-    unique_labels = np.unique(labels)
-    for label in unique_labels:
-        label_idx = np.flatnonzero(labels == label)
-        label_idx = np.random.permutation(label_idx)
+    for digit in range(10):
+        digit_idx = np.flatnonzero(all_labels == digit)
+        digit_idx = np.random.permutation(digit_idx)
 
-
-        query_index.extend(label_idx[:50])  # Adjust the number of query examples per class
-        database_index.extend(label_idx[50:])  # Remaining for database
+        # Split the data into query and database - Adjust these numbers according to the desired split
+        query_index.extend(digit_idx[:100])  # 100 per class for the query
+        database_index.extend(digit_idx[100:])  # remaining for database
 
     # Extract query and database data
-    query_data = (features[query_index], labels[query_index])
-    database_data = (features[database_index], labels[database_index])
+    query_data = (features[query_index], all_labels[query_index])
+    database_data = (features[database_index], all_labels[database_index])
 
     return query_data, database_data
-
 
 def load_cifar10_deep(root):
     """
@@ -75,9 +136,6 @@ def load_cifar10_deep(root):
            database_data: tuple[array], (features, labels)
        """
     all_features = []
-
-    # Initialize the labels for each class (0-9) with 5000 instances each
-    class_labels = np.array([digit for digit in range(10) for _ in range(5000)])
 
     # Load features from each batch (1-5)
     for i in range(1, 6):
@@ -109,7 +167,7 @@ def load_cifar10_deep(root):
     all_labels = np.repeat(np.arange(10), 5000)  # 10 classes with 5000 samples each
 
     # Check the shapes
-    assert features.shape == (50000, 25088), f"Expected shape (50000, 25088) but got {features.shape}"
+    assert features.shape == (50000, 512), f"Expected shape (50000, 512) but got {features.shape}"
     assert len(all_labels) == 50000, f"Expected 50000 labels but got {len(all_labels)}"
 
     # Indices for query and database sets
@@ -126,6 +184,9 @@ def load_cifar10_deep(root):
     # Extract query and database data
     query_data = (features[query_index], all_labels[query_index])
     database_data = (features[database_index], all_labels[database_index])
+
+    print("Sample of query data labels (first 10 labels):", query_data[1][:10])
+    print("Counts of labels in query data:", {digit: np.sum(query_data[1] == digit) for digit in range(10)})
 
     return query_data, database_data
 
