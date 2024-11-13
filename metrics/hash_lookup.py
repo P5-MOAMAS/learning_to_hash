@@ -7,8 +7,9 @@ import numpy as np
 
 class Database:
     def __init__(self):
-        # Key hashcode - value array of ids of picture that has that hash-code
+        # List of all images in buckets, the hashcode for a given bucket is the same index in the hashcode table
         self.database = []
+        # List of hash-codes
         self.hashcodes = []
 
 
@@ -16,6 +17,13 @@ class Database:
         index = self.get_hash_code_index(key)
         return self.database[index] if index is not None else None
 
+
+    def get_image_hash_code(self, id: int):
+        for i in range(len(self.database)):
+            for j in range(len(self.database[i])):
+                if self.database[i][j] == id:
+                    return self.hashcodes[i]
+        return None
 
     def get_hash_code_index(self, key) -> int | None:
         for i, hashcode in enumerate(self.hashcodes):
