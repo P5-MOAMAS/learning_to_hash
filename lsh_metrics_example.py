@@ -2,6 +2,8 @@ import torchvision
 from torchvision import transforms
 from torch.utils.data import DataLoader
 import numpy as np
+
+from metrics.calc_metrics import calculate_metrics
 from models.lsh import Lsh
 from tqdm import tqdm
 from metrics import metrics_framework
@@ -47,4 +49,4 @@ print("Removed the query image from the dataset.")
 # Query LSH to find hash codes for the query image
 query_hash_codes = image_lsh.query(query_image)
 print("Hash codes for query image:", query_hash_codes)
-metrics_framework.calculate_metrics(image_lsh.query, cifar10_validation, False)
+calculate_metrics(image_lsh.query, cifar10_validation, False)
