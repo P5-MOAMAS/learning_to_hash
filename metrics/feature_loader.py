@@ -32,7 +32,7 @@ class FeatureLoader:
             name = "features/cifar-10-" + str(i) + "-features"
 
             with open(name, 'rb') as f:
-                data = torch.load(f)
+                data = torch.load(f, weights_only=False)
 
             data = [np.array(i) for i in data]
 
