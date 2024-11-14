@@ -1,13 +1,10 @@
-import torchvision
 from torchvision import transforms
-from torch.utils.data import DataLoader
 import numpy as np
 
 from metrics.calc_metrics import calculate_metrics
+from metrics.feature_loader import FeatureLoader
 from models.lsh import Lsh
-from tqdm import tqdm
-from metrics import metrics_framework
-from metrics import feature_loader
+
 
 # Define transformation: Convert to tensor and normalize
 transform = transforms.Compose(
@@ -18,7 +15,7 @@ transform = transforms.Compose(
 )
 
 # Load the features from the CIFAR-10 dataset
-fl = feature_loader.FeatureLoader("cifar-10")
+fl = FeatureLoader("cifar-10")
 cifar10_validation = fl.validation
 features = []
 for i in range(len(fl.training)):
