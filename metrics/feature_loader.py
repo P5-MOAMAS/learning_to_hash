@@ -4,7 +4,7 @@ import sys
 import psutil
 import torch
 import numpy as np
-from hash_lookup import pre_gen_hash_codes
+from metrics.hash_lookup import pre_gen_hash_codes
 
 
 class FeatureLoader:

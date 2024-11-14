@@ -1,6 +1,6 @@
 from typing import Callable
-from feature_loader import FeatureLoader
-from gen_cifar_simmat import SimilarityMatrix
+from metrics.feature_loader import FeatureLoader
+from metrics.gen_cifar_simmat import SimilarityMatrix
 from metrics.hash_lookup import pre_gen_hash_codes
 
 """
@@ -12,6 +12,7 @@ Generate useful metrics for measuring how well the function approximates
 a hash code for the given image.
 """
 def calculate_metrics(function: Callable, dataset: list[tuple[int, list, int]], is_deep = True):
+    
     """
     TODO: Brug hash_lookup og pre_gen_hash_codes til at skabe db'en. Signaturen er ændret så den passer bedre ind.
     Db'en generere en list per query, så brug den til fx, udregning af precision osv.
