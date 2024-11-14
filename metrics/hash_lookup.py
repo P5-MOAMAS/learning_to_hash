@@ -54,6 +54,8 @@ class Database:
     def __setitem__(self, key, value) -> None:
         index = self.get_hash_code_index(key)
         if index is None:
+            # Converts all -1 in hashcode to 0
+            key[key == -1] = 0
             self.database.append([value])
             self.hashcodes.append(key)
         else:
@@ -101,7 +103,8 @@ class Database:
     
     returns: int - The distance between two hash-codes
     """
-    def hamming_distance(self, bin1, bin2) -> int:
+    @staticmethod
+    def hamming_distance(bin1, bin2) -> int:
         return np.count_nonzero(bin1 != bin2)
 
 
@@ -121,7 +124,7 @@ def pre_gen_hash_codes(model_query: Callable, dataset: list[tuple[int, list, int
         index, feature, label = e
         print("Generating hash codes:", count + 1, "out of", len(dataset), "   ", sep=" ", end="\r") # Fuck progress bar
         key = model_query(feature)
-        db[key] = index
+        db[key] = count
     print()
 
     return db
