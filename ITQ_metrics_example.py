@@ -1,5 +1,5 @@
-from metrics import metrics_framework
 from metrics import feature_loader
+from metrics.calc_metrics import calculate_metrics
 from models.ITQ.hashing.itq_model import *
 
 # Load the features from the CIFAR-10 dataset
@@ -24,4 +24,4 @@ database_b = model.encode(features)
 query_hash_codes = model.encode_single(query_image)
 print("Hash codes for query image:", query_hash_codes)
 
-metrics_framework.calculate_metrics(model.encode_single, cifar10_validation, False)
+calculate_metrics(model.encode_single, cifar10_validation, False)
