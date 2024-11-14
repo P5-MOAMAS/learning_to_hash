@@ -1,6 +1,7 @@
-from itq_model import ITQ
 from dataset import *
 from evaluation import mean_average_precision, precision_recall
+from itq_model import ITQ
+
 
 def load_dataset(dataset_name):
     """
@@ -21,13 +22,13 @@ def load_dataset(dataset_name):
             root = './datasets/mnist-gist-512d.npz'
             query_data, train_data, database_data = load_mnist_gist(root)
         case 'cifar10_deep':
-            root = './deep_features/cifar10_features'
+            root = './features/cifar-10_features'
             query_data, database_data = load_cifar10_deep(root)
         case 'cifar10_gist':
             root = './datasets/'
             query_data, database_data = load_cifar10_gist(root)
         case 'imagenet_deep':
-            root = './imagenet_deep_features/'
+            root = './features/image-net_features'
             query_data, database_data = load_imagenet_deep(root)
         case _:
             raise ValueError(f'Unknown dataset: {dataset_name}')
@@ -48,7 +49,7 @@ def initialize_itq(encode_len):
     model = ITQ(encode_len)
     return model
 
-def fit_and_save_model(model, database, model_path='itq_model.pth'):
+def fit_and_save_model(model, database, dataset_name, encode_len):
     """
     Fit the ITQ model and save it to a file.
 
@@ -61,7 +62,7 @@ def fit_and_save_model(model, database, model_path='itq_model.pth'):
             The file path where the trained model will be saved.
     """
     model.fit(database)
-    model.save_model(model_path)
+    model.save_model(f'{dataset_name}_model_bits{encode_len}.pth')
 
 def load_and_encode_model(model, query, database, model_path='itq_model.pth'):
     """
@@ -152,12 +153,15 @@ def train(dataset_name, encode_len):
     print(f'Database shape: {database.shape}, Labels shape: {database_label.shape}')
 
     model = initialize_itq(encode_len)
-    fit_and_save_model(model, database)
+    fit_and_save_model(model, database, dataset_name, encode_len)
     query_b, database_b = load_and_encode_model(model, query, database)
+
     mAP, precision, recall = evaluate_model(query_b, query_label, database_b, database_label)
     print_metrics(mAP, precision, recall)
 
 if __name__ == '__main__':
-    dataset_name = 'mnist'  # Change this as needed
-    encode_len = 8          # Change this as needed (e.g., 8, 16, 32, 64)
+    dataset_name = 'cifar10_deep'  # Change this as needed
+    encode_len = 16          # Change this as needed (e.g., 8, 16, 32, 64)
     train(dataset_name, encode_len)
+    # calculate_metrics(train(dataset_name, encode_len), cifar10_dataset)
+
