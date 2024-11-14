@@ -9,8 +9,8 @@ def average_precision(database: Database, query_idx: int, dataset: List[Tuple[in
     # Compute Hamming distances for all other images in the dataset
     neighbors_distance = database.get_neighbors(database.get_image_hash_code(query_idx), 99999)
 
-    # Sort by Hamming distance
-    distance_sorted = dict(sorted(neighbors_distance.items(), key=lambda item: (item[1], item[0])))
+    # Sort by Hamming distance the sorted list is [(id, distance), ...]
+    distance_sorted = sorted(neighbors_distance.items(), key=lambda item: (item[1], item[0]))
 
     query_label = dataset[query_idx][2]
 
@@ -19,8 +19,8 @@ def average_precision(database: Database, query_idx: int, dataset: List[Tuple[in
 
     # Calculate precision at each rank (rank is essentially based on the hamming distance)
     ap = 0
-    for rank, key in enumerate(distance_sorted.keys(), start=1):
-        if query_label == dataset[key][2]:
+    for rank, image in enumerate(distance_sorted, start=1):
+        if query_label == dataset[image[0]][2]:
             relevant_count += 1
             precision_at_rank = relevant_count / rank
             ap += precision_at_rank
