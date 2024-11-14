@@ -1,6 +1,6 @@
 from typing import Callable
-from feature_loader import FeatureLoader
-from gen_cifar_simmat import SimilarityMatrix
+from metrics.feature_loader import FeatureLoader
+from metrics.gen_cifar_simmat import SimilarityMatrix
 from metrics.hash_lookup import pre_gen_hash_codes
 
 """
