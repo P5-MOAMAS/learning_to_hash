@@ -1,4 +1,3 @@
-from os import sep
 import pickle
 import sys
 import psutil
@@ -41,7 +40,6 @@ class FeatureLoader:
                 print("No data was retrieved from '" + name + "'")
                 sys.exit(1)
             image_features += data
-        
         # Get all labels in cifar
         fp = "cifar-10-batches-py/"
         fileNames = []
@@ -61,12 +59,14 @@ class FeatureLoader:
             idx_feature_label.append((id, feature, label))
 
 
-        # Arbitrary slicing of array
-        slice_len = len(idx_feature_label) // 3
+        # Splitting dataset into 70% training 15 % testing and validation
+        training_len = round(len(idx_feature_label) * 0.7)
+        valid_test_len = (len(idx_feature_label) - training_len) // 2
+        test_slice = training_len + valid_test_len
 
-        self.training = idx_feature_label[0:slice_len]
-        self.test = idx_feature_label[slice_len:slice_len * 2]
-        self.validation = idx_feature_label[slice_len * 2:]
+        self.training = idx_feature_label[0:training_len]
+        self.test = idx_feature_label[training_len:test_slice]
+        self.validation = idx_feature_label[test_slice:valid_test_len + test_slice]
 
 
 def unpickle(file):

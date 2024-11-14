@@ -15,6 +15,7 @@ class DynamicDataset(Dataset):
         self.start_index = start_index
         self.batch = start_index
         self.name = dataset_name
+        self.imagenet_loader = None
 
         match dataset_name:
             case "cifar-10":
@@ -26,6 +27,7 @@ class DynamicDataset(Dataset):
             case "image-net":
                 self.max_batch = 55
                 self.func = self.__load_image_net__
+                self.imagenet_loader = ImageNetLoader()
             case _:
                 print("No dataset with given name!")
                 sys.exit(1)
@@ -120,15 +122,9 @@ class DynamicDataset(Dataset):
     def __load_image_net__(self):
         self.check_bounds()
         print("Loading ImageNet dataset")
-        loader = ImageNetLoader()
-        trans = transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor()
-        ])
         batch_start = (self.batch - 1) * 10000
-        batch_size = 10000 if self.batch + 1 != self.max_batch else 4546
-        return loader.load_images(batch_start, batch_start + batch_size, trans)
+        batch_size = 10000 if self.batch != self.max_batch else 4546
+        return self.transform_images(self.imagenet_loader.load_images(batch_start, batch_start + batch_size))
 
 if __name__ == "__main__":
     dd = DynamicDataset("image-net")

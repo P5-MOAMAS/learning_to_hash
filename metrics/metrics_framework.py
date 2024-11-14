@@ -17,43 +17,37 @@ def calculate_metrics(function: Callable, dataset: list[tuple[int, list, int]], 
     TODO: Brug hash_lookup og pre_gen_hash_codes til at skabe db'en. Signaturen er ændret så den passer bedre ind.
     Db'en generere en list per query, så brug den til fx, udregning af precision osv.
     DB kommer ikke ud sorteret!!! Så sorter query således 'tætteste' kommer først.
-
-    db = pre_gen_hash_codes(function, dataset)
-    sim_matrix = SimilarityMatrix.create_matrix(dataset)
-
-    mAP = calc_mean_average_precision(sim_matrix, q, q_results)
-    precision_recall = calculate_precision_recall_curve(sim_matrix)
-
-    for id, feature, label in dataset: # ???? Vel ikke på alting? Hvor meget data til det her?
-        pass
     """
+
+    db = pre_gen_hash_codes(function, dataset) # Create database.
+
+    sim_matrix = SimilarityMatrix.create_matrix(dataset) # Generate similarity matrix with this dataset
+
+    # Calculate average precision for each query
+    aps = []
+    for index, tmp in enumerate(dataset):
+        id, feature, label = tmp
+        print("Calculating average precisions:", index + 1, "of", len(dataset), "       ", sep=" ", end="\r")
+
+        digest = function(feature)
+        query_result = db.get_images_with_distance_sorted(digest, 2) # Is it good with max distance = 2?
+        ap = average_precision(sim_matrix, id, query_result)
+        aps.append(ap)
+    print()
+
+    # Calculate mean average precision
+    mAP = sum(aps) / len(aps)
+
+    # Temp print of mAP
+    print("mAP: ", mAP)
     pass
-
-def calculate_recall(sim_matrix: SimilarityMatrix, id: int, image_ids: list[int]):
-    related = sim_matrix.get_related(id)
-    count = sum([1 if x in related else 0 for x in image_ids])
-
-    if len(related) == 0:
-        return 0
-    else:
-        return count / len(related)
-
-
-def calculate_precision(sim_matrix: SimilarityMatrix, id: int, image_ids: list[int]):
-    related = sim_matrix.get_related(id)
-    count = sum([1 if x in related else 0 for x in image_ids])
-    
-    if len(image_ids) == 0:
-        return 0
-    else:
-        return count / len(image_ids)
 
 
 """
 https://builtin.com/articles/mean-average-precision
 Used the above for reference
 """
-def average_precision_at_n(sim_matrix: SimilarityMatrix, query_image_idx: int, image_ids: list[int]):
+def average_precision(sim_matrix: SimilarityMatrix, query_image_idx: int, image_ids: list[int]):
     gtp_set = sim_matrix.get_related(query_image_idx) # Ground truth positives
 
     g_prime = []
@@ -72,12 +66,12 @@ def average_precision_at_n(sim_matrix: SimilarityMatrix, query_image_idx: int, i
         return 0
 
 
-def calc_mean_average_precision(sim_matrix: SimilarityMatrix, queries: list[int], image_query_results: dict[int, list[int]]):
-    aps = [average_precision_at_n(sim_matrix, query, image_query_results[query]) for query in image_query_results]
+def calc_mean_average_precision(sim_matrix: SimilarityMatrix, image_query_results: dict[int, list[int]]):
+    aps = [average_precision(sim_matrix, query, image_query_results[query]) for query in image_query_results]
     s = sum(aps)
     for i, ap in enumerate(aps):
         print("Average precision ("+ str(i) +"):" + str(ap))
-    return s / len(queries)
+    return s / len(image_query_results)
 
 
 def calculate_precision_recall_curve(sim_matrix: SimilarityMatrix, query_image_idx: int, image_ids: list[int]):
@@ -101,9 +95,8 @@ def calculate_precision_recall_curve(sim_matrix: SimilarityMatrix, query_image_i
 
 
 if __name__ == '__main__':
-    queries = [x for x in range(100)]
     query_results = {}
-    for x in queries:
+    for x in [x for x in range(100)]:
         query_results[x] = [i for i in range(0, 50000)]
     
     fl = FeatureLoader("cifar-10")
@@ -111,5 +104,5 @@ if __name__ == '__main__':
     if fl.training == None:
         raise Exception("Training subset was null")
 
-    avg = calc_mean_average_precision(SimilarityMatrix.create_matrix(fl.training), queries, query_results)
+    avg = calc_mean_average_precision(SimilarityMatrix.create_matrix(fl.training), query_results)
     print(avg)
