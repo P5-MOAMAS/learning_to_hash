@@ -33,7 +33,7 @@ from evaluation import mean_average_precision, precision_recall  # Evaluation fu
 from dataset import load_cifar10_deep  # Dataset loading function
 
 # Load CIFAR-10 Features
-root = './deep_features/cifar10_features/'
+root = './features/cifar10_features/'
 query_data, train_data, database_data = load_cifar10_deep(root)
 
 query, query_label = query_data
