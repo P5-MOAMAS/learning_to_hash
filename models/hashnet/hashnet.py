@@ -36,7 +36,7 @@ def get_config():
         # "dataset": "nuswide_21",
         # "dataset": "nuswide_21_m",
         # "dataset": "nuswide_81_m",
-        "epoch": 5,
+        "epoch": 1,
         "test_map": 1,
         "save_path": "save/HashNet",
         # "device":torch.device("cpu"),

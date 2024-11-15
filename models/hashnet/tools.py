@@ -266,6 +266,7 @@ def CalcTopMapWithPR(qB, queryL, rB, retrievalL, topk):
         topkmap_ = np.mean(count / (tindex))
         topkmap = topkmap + topkmap_
     topkmap = topkmap / num_query
+    topkmap = topkmap.round(3)
     index = np.argwhere(recall[:, -1] == 1.0)
     index = index.squeeze()
     prec = prec[index]
