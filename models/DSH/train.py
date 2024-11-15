@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader, Dataset
 import torchvision.transforms as transforms
 from torch.utils.tensorboard import SummaryWriter
 from model import LiuDSH
-
+from tqdm import tqdm  # Add tqdm for progress bar
 # hyper-parameters
 DATA_ROOT = 'data_out'
 LR_INIT = 3e-4
@@ -87,19 +87,11 @@ class PairDataset(Dataset):
         target_equals = 0 if x_target == y_target else 1
         return x_img, x_target, y_img, y_target, target_equals,
 
-class Trainer:
-    """
-            Handles model training, evaluation, and logging.
 
-            Args:
-                model: The model to train.
-                train_dataloader: DataLoader for training data.
-                test_dataloader: DataLoader for testing data.
-                dataset (PairDataset): The dataset object containing dataset parameters.
-                code_size (int): Size of the hash code for embedding.
-                epochs (int): Number of training epochs.
-            """
+
+class Trainer:
     def __init__(self, model, train_dataloader, test_dataloader, dataset: PairDataset, code_size: int, epochs: int):
+        self.code_size = code_size
         self.model = model
         self.train_dataloader = train_dataloader
         self.test_dataloader = test_dataloader
@@ -110,60 +102,45 @@ class Trainer:
         self.writer = SummaryWriter()
         self.writer.add_graph(model, self.generate_dummy_input(), verbose=True)
 
-        # Define the loss functions (mean squared error for pairwise distance, L1 for regularization)
         self.mse_loss = nn.MSELoss(reduction='none')
         self.l1_loss = nn.L1Loss(reduction='mean')
         self.optimizer = optim.Adam(model.parameters(), lr=LR_INIT)
 
-    def __del__(self):
-        # Ensure that the writer closes properly
-        self.writer.close()
+        self.best_loss = float('inf')  # Initialize best loss to a high value
+        self.best_epoch = -1  # To track which epoch had the best model
+        self.best_model_path = "best_model.pth"  # File name for saving the best model
 
     def generate_dummy_input(self):
-        # Generate a dummy input tensor for the model
-        return torch.randn(1, *self.input_shape)
+        return torch.randn(1, *self.input_shape, device=device)
+
+    def __del__(self):
+        self.writer.close()
 
     def run_step(self, model, x_imgs, y_imgs, target_equals, train: bool):
-        x_out = model(x_imgs) # Output for the first image (x_imgs)
-        y_out = model(y_imgs) # Output for the second image (y_imgs)
+        x_out = model(x_imgs)
+        y_out = model(y_imgs)
 
-        # squared_loss: Mean squared error between the model outputs for image pairs
         squared_loss = torch.mean(self.mse_loss(x_out, y_out), dim=1)
-        # T1: 0.5 * (1 - y) * dist(x1, x2)
-        # Compute the loss for similar pairs (target_equals = 0)
         positive_pair_loss = (0.5 * (1 - target_equals) * squared_loss)
         mean_positive_pair_loss = torch.mean(positive_pair_loss)
 
-        # T2: 0.5 * y * max(margin - dist(x1, x2), 0)
-        # Calculate the margin loss for dissimilar pairs (target_equals = 1)
         zeros = torch.zeros_like(squared_loss).to(device)
         margin = MARGIN * torch.ones_like(squared_loss).to(device)
         negative_pair_loss = 0.5 * target_equals * torch.max(zeros, margin - squared_loss)
         mean_negative_pair_loss = torch.mean(negative_pair_loss)
 
-        # T3: alpha(dst_l1(abs(x1), 1)) + dist_l1(abs(x2), 1)))
-        # Apply regularization on the absolute values of the outputs to push them towards +1 or -1
         mean_value_regularization = ALPHA * (
                 self.l1_loss(torch.abs(x_out), torch.ones_like(x_out)) +
                 self.l1_loss(torch.abs(y_out), torch.ones_like(y_out)))
 
-        # Combine the positive pair loss, negative pair loss, and the regularization term
         self.loss = mean_positive_pair_loss + mean_negative_pair_loss + mean_value_regularization
 
-        print(f'epoch: {self.global_epoch:02d}\t'
-              f'step: {self.global_step:06d}\t'
-              f'loss: {self.loss.item():04f}\t'
-              f'positive_loss: {mean_positive_pair_loss.item():04f}\t'
-              f'negative_loss: {mean_negative_pair_loss.item():04f}\t'
-              f'regularize_loss: {mean_value_regularization:04f}')
-
-        # log them to tensorboard
+        # Log to tensorboard
         self.writer.add_scalar('loss', self.loss.item(), self.global_step)
         self.writer.add_scalar('positive_pair_loss', mean_positive_pair_loss.item(), self.global_step)
         self.writer.add_scalar('negative_pair_loss', mean_negative_pair_loss.item(), self.global_step)
         self.writer.add_scalar('regularizer_loss', mean_value_regularization.item(), self.global_step)
 
-        #  Backpropagation and optimization (if training)
         if train:
             self.optimizer.zero_grad()
             self.loss.backward()
@@ -171,84 +148,59 @@ class Trainer:
 
         return x_out, y_out
 
+    def evaluate(self):
+        self.model.eval()
+        total_loss = 0
+        count = 0
+        with torch.no_grad():
+            for x_imgs, x_targets, y_imgs, y_targets, target_equals in self.test_dataloader:
+                target_equals = target_equals.type(torch.float)
+                _, _ = self.run_step(self.model, x_imgs, y_imgs, target_equals, train=False)
+                total_loss += self.loss.item()
+                count += 1
+        avg_loss = total_loss / count
+        self.writer.add_scalar('loss', avg_loss, self.global_epoch)
+        return avg_loss
+
     def train(self):
-        for _ in range(self.total_epochs):
-            # For each batch in the training dataset (train_dataloader)
+        for epoch in range(self.total_epochs):
+            self.global_epoch = epoch
+            progress_bar = tqdm(
+                total=len(self.train_dataloader),
+                desc=f"Epoch {epoch + 1:02d}",
+                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} batches",
+                leave=False,
+            )
+
+            self.model.train()
+
             for x_imgs, x_targets, y_imgs, y_targets, target_equals in self.train_dataloader:
                 target_equals = target_equals.type(torch.float)
-                # Run a training step, updating the model parameters
                 self.run_step(self.model, x_imgs, y_imgs, target_equals, train=True)
                 self.global_step += 1
 
-            # accumulate tensors for embeddings visualization
-            test_imgs = []
-            test_targets = []
-            hash_embeddings = []
-            embeddings = []
+                # Update progress bar with current losses
+                progress_bar.set_postfix({
+                    'step': f'{self.global_step:06d}',
+                    'loss': f'{self.loss.item():.04f}',
+                })
+                progress_bar.update(1)
 
-            #  Iterate over the test dataset for evaluation/visualization
-            for test_x_imgs, test_x_targets, test_y_imgs, test_y_targets, test_target_equals in self.test_dataloader:
-                test_target_equals = test_target_equals.type(torch.float)
-                with torch.no_grad():
-                    # Get embeddings for both images in the test set
-                    x_embeddings, y_embeddings = self.run_step(
-                        self.model, test_x_imgs, test_y_imgs, test_target_equals, train=False)
+            progress_bar.close()
 
-                if x_embeddings is None or y_embeddings is None:
-                    print("Warning: Model output is None for the pair!")
-                    continue  # Skip this batch if embeddings are invalid
+            # Evaluate the model at the end of the epoch
+            avg_loss = self.evaluate()
+            print(f"Epoch {epoch + 1}/{self.total_epochs}, Validation Loss: {avg_loss:.4f}")
 
-                # Show all images that consist the pairs
-                test_imgs.extend([test_x_imgs.cpu()[:5], test_y_imgs.cpu()[:5]])
-                test_targets.extend([test_x_targets.cpu()[:5], test_y_targets.cpu()[:5]])
+            # Save the model if it has the best performance so far
+            if avg_loss < self.best_loss:
+                self.best_loss = avg_loss
+                self.best_epoch = epoch + 1
+                torch.save(self.model.state_dict(), self.best_model_path)
+                print(f"New best model saved with loss {self.best_loss:.4f}")
 
-                # embedding1: hamming space embedding
-                x_hash = torch.round(x_embeddings.cpu()[:5].clamp(-1, 1) * 0.5 + 0.5)
-                y_hash = torch.round(y_embeddings.cpu()[:5].clamp(-1, 1) * 0.5 + 0.5)
-                hash_embeddings.extend([x_hash, y_hash])
+        print(f"Training complete. Best model saved at {self.best_model_path} with loss {self.best_loss:.4f} from epoch {self.best_epoch}")
 
-                # emgedding2: raw embedding
-                embeddings.extend([x_embeddings.cpu(), y_embeddings.cpu()])
-
-                self.global_step += 1
-
-            # Log the raw embedding distribution to TensorBoard
-            self.writer.add_histogram(
-                'embedding_distribution',
-                torch.cat(embeddings).cpu().numpy(),
-                global_step=self.global_step)
-
-            # Draw embeddings for a single batch - very nice for visualizing clusters
-            self.writer.add_embedding(
-                torch.cat(hash_embeddings),
-                metadata=torch.cat(test_targets),
-                label_img=torch.cat(test_imgs),
-                global_step=self.global_step)
-
-            # Tensor format
-            hash_vals = torch.cat(hash_embeddings).numpy().astype(int)
-            targets = torch.cat(test_targets).numpy().astype(int)
-
-            # Use a dictionary format for debugging
-            hashdict = defaultdict(list)
-            for target_class, hash_value in zip(targets, hash_vals):
-                binary_str =''.join(map(str, hash_value))
-                hashdict[target_class].append(binary_str)
-
-            result_texts = []
-            for target_class in sorted(hashdict.keys()):  # Iterate over sorted class labels
-                for binary_str in hashdict[target_class]:  # Iterate over the binary hashes
-                    result_texts.append(f'class: {target_class:02d} - {binary_str}') # Prepare the text to display
-                    # Log the binary hash value to TensorBoard for each class
-                    self.writer.add_text(
-                        f'e{self.global_epoch}_hashvals/{target_class:02d}',
-                        binary_str, global_step=self.global_step)
-
-            # Print the result texts
-            result_text = '\n'.join(result_texts)
-            print(result_text)
-
-            self.global_epoch += 1
 
 def train_model(dataset_name: str, code_size: int, epochs: int):
     """
@@ -296,8 +248,8 @@ def train_model(dataset_name: str, code_size: int, epochs: int):
 
 if __name__ == '__main__':
     dataset = 'mnist' # Choose between mnist, cifar or imagenet
-    code_size = 16 # Choose e.g. (8, 16, 32, 64)
-    epochs = 5
+    code_size = 64 # Choose e.g. (8, 16, 32, 64)
+    epochs = 100
     train_model(dataset_name=dataset, code_size=code_size, epochs=epochs)
 
     #For loading the model:
