@@ -127,7 +127,7 @@ class LiuDSH(nn.Module):
         with torch.no_grad():
             embedding=self.forward(image.unsqueeze(0))
             binary_hash = torch.round(embedding.clamp(-1,1)*0.5+0.5).cpu().int()
-            return binary_hash
+            return binary_hash.float()
 
 if __name__ == '__main__':
     # Create a dummy tensor to simulate the input data

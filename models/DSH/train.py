@@ -246,11 +246,24 @@ def train_model(dataset_name: str, code_size: int, epochs: int):
     # Save the trained model
     torch.save(model.state_dict(), f'{dataset_name}_hash_model.pth')
 
+def get_image_hash(model_path: str, image: torch.Tensor, dataset_name: str, code_size: int):
+    dataset, size, channels, classes = setup_data(dataset_name, DATA_ROOT)
+    model = LiuDSH(code_size=code_size, channels=channels, size=size, num_classes=classes).to(device)
+    model.load_state_dict(torch.load(model_path))
+    model.eval()
+    return model.query_image(image)
+
 if __name__ == '__main__':
     dataset = 'mnist' # Choose between mnist, cifar or imagenet
     code_size = 64 # Choose e.g. (8, 16, 32, 64)
-    epochs = 100
-    train_model(dataset_name=dataset, code_size=code_size, epochs=epochs)
+    epochs = 5
+    #train_model(dataset_name=dataset, code_size=code_size, epochs=epochs)
+
+    # Example of querying hash code for an image
+    test_pair_dataset = PairDataset(DATA_ROOT, dataset, train=False)
+    test_image, _ = test_pair_dataset[0][:2]
+    hash_code = get_image_hash('best_model.pth', test_image, dataset, code_size)
+    print("Hash Code for the test image:", hash_code)
 
     #For loading the model:
     #model.load_state_dict(torch.load('hash_model.pth', weights_only=True))
