@@ -1,8 +1,8 @@
 from torchvision import transforms
 import numpy as np
 
-from metrics.calc_metrics import calculate_metrics
 from metrics.feature_loader import FeatureLoader
+from metrics.metrics_framework import MetricsFramework
 from models.lsh import Lsh
 
 
@@ -20,14 +20,13 @@ cifar10_validation = fl.validation
 features = []
 for i in range(len(fl.training)):
     features.append(fl.training[i][1])
-del fl
 
 # Flatten the images for compatibility with LSH (each image as a 1D feature vector)
 features = np.array(features)
 
 # Set LSH parameters
 num_tables = 5
-num_bits_per_table = 16
+num_bits_per_table = 4
 pca_components = 50
 
 # Initialize LSH with the features data
@@ -46,4 +45,5 @@ print("Removed the query image from the dataset.")
 # Query LSH to find hash codes for the query image
 query_hash_codes = image_lsh.query(query_image)
 print("Hash codes for query image:", query_hash_codes)
-calculate_metrics(image_lsh.query, cifar10_validation, False)
+metrics_framework = MetricsFramework(image_lsh.query, cifar10_validation)
+metrics_framework.calculate_metrics(cifar10_validation, 10)

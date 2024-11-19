@@ -1,7 +1,7 @@
 # Import Spectral Hashing
+from metrics.metrics_framework import MetricsFramework
 from models.spectral_hashing import SH as SpectralHash
 from metrics import feature_loader
-from metrics import metrics_framework
 
 import numpy as np
 
@@ -11,7 +11,6 @@ cifar10_validation = fl.validation
 features = []
 for i in range(len(fl.training)):
     features.append(fl.training[i][1])
-del fl
 
 # Convert the features to a numpy array
 features = np.array(features)
@@ -29,4 +28,6 @@ query_feature = features[0].reshape(1, -1)
 # Query Spectral Hashing to find hash code for the query feature
 query_hash_code = spectral_hash.query(query_feature)
 print("Hash codes for query image:", query_hash_code)
-metrics_framework.calculate_metrics(spectral_hash.query, cifar10_validation, False)
+
+metrics_framework = MetricsFramework(spectral_hash.query, fl.training)
+metrics_framework.calculate_metrics(cifar10_validation, 999999)

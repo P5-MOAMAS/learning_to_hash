@@ -1,108 +1,223 @@
-from typing import Callable
-from metrics.feature_loader import FeatureLoader
-from metrics.gen_cifar_simmat import SimilarityMatrix
-from metrics.hash_lookup import pre_gen_hash_codes
+from collections.abc import Callable
+from typing import List, Tuple
 
-"""
-Takes a function that generates an image hash code, given an image.
-function: function from image to hash code.
-dataset_name: name of the dataset to use.
+import numpy as np
+import torch
 
-Generate useful metrics for measuring how well the function approximates
-a hash code for the given image.
-"""
-def calculate_metrics(function: Callable, dataset: list[tuple[int, list, int]], is_deep = True):
-    
+class MetricsFramework:
+    def __init__(self, query_func: Callable, dataset:  List[Tuple[int, List[int], int]]):
+        self.query_func = query_func
+        self.database = self.create_database(dataset)
+        self.hit_miss = []
+
+
     """
-    TODO: Brug hash_lookup og pre_gen_hash_codes til at skabe db'en. Signaturen er ændret så den passer bedre ind.
-    Db'en generere en list per query, så brug den til fx, udregning af precision osv.
-    DB kommer ikke ud sorteret!!! Så sorter query således 'tætteste' kommer først.
+    Creates a database, a list of tuples containing (id, hash-code, label) for each item in the dataset
     """
+    def create_database(self, dataset: List[Tuple[int, List[int], int]]) -> List[Tuple[int, List[int], int]]:
+        if len(dataset) == 0:
+            RuntimeError("Dataset is empty")
 
-    db = pre_gen_hash_codes(function, dataset) # Create database.
+        database = []
+        for i, (idx, feature, label) in enumerate(dataset):
+            code = self.query_func(feature)
+            # Ensure code ís 1D and uses 0 instead of -1
+            code = np.asarray(code).flatten()
+            code[code == -1] = 0
+            database.append((idx, code, label))
 
-    sim_matrix = SimilarityMatrix.create_matrix(dataset) # Generate similarity matrix with this dataset
+        return database
 
-    # Calculate average precision for each query
-    aps = []
-    for index, tmp in enumerate(dataset):
-        id, feature, label = tmp
-        print("Calculating average precisions:", index + 1, "of", len(dataset), "       ", sep=" ", end="\r")
+    """
+    Returns a list of length total_predictions, containing tuples of (id, hash-code, hamming distance, if labels are equal)
+    """
+    def find_nearest_neighbours(self, query: (int, List[int], int), total_predictions: int) -> List[Tuple[int, List[int], int, bool]]:
+        query_id, query_code, query_label = query
+        query_code = np.array(query_code)
 
-        digest = function(feature)
-        query_result = db.get_images_with_distance_sorted(digest, 2) # Is it good with max distance = 2?
-        ap = average_precision(sim_matrix, id, query_result)
-        aps.append(ap)
-    print()
+        database_codes = np.array([code for _, code, _ in self.database])
+        database_labels = np.array([label for _, _, label in self.database])
 
-    # Calculate mean average precision
-    mAP = sum(aps) / len(aps)
+        # Calculate the Hamming distance for all entries in the database
+        distances = np.sum(database_codes != query_code, axis=1)
 
-    # Temp print of mAP
-    print("mAP: ", mAP)
-    pass
+        # Compute the relevance
+        is_relevant = (database_labels == query_label)
 
+        # Find the indices of the top N nearest neighbors based on their distance to the query
+        top_indices = np.argsort(distances)[:total_predictions]
 
-"""
-https://builtin.com/articles/mean-average-precision
-Used the above for reference
-"""
-def average_precision(sim_matrix: SimilarityMatrix, query_image_idx: int, image_ids: list[int]):
-    gtp_set = sim_matrix.get_related(query_image_idx) # Ground truth positives
+        # Create the structure list for the top predictions
+        predictions = [
+            (self.database[i][0], self.database[i][1], distances[i], is_relevant[i]) for i in top_indices
+        ]
 
-    g_prime = []
-    count = 0
-    tp = 0
-
-    for idx in image_ids:
-        count += 1
-        if idx in gtp_set:
-            tp += 1
-            g_prime.append(tp / count)
-
-    if len(g_prime) > 0:
-        return sum(g_prime) / len(gtp_set)
-    else:
-        return 0
+        return predictions
 
 
-def calc_mean_average_precision(sim_matrix: SimilarityMatrix, image_query_results: dict[int, list[int]]):
-    aps = [average_precision(sim_matrix, query, image_query_results[query]) for query in image_query_results]
-    s = sum(aps)
-    for i, ap in enumerate(aps):
-        print("Average precision ("+ str(i) +"):" + str(ap))
-    return s / len(image_query_results)
+    """
+    Returns the precision of a given query for a maximum of total_predictions
+    """
+    def precision(self, query: (int, List[int], int), total_predictions: int) -> float:
+        neighbours = self.find_nearest_neighbours(query, total_predictions)
+        correct_predictions = 0
+        for (idx, code, distance, is_relevant) in neighbours:
+            if is_relevant:
+                correct_predictions += 1
+
+        return correct_predictions / total_predictions
+
+    """
+    Returns the recall of a given query for a maximum of total_predictions
+    """
+    def recall(self, query: (int, List[int], int), total_predictions: int) -> float:
+        neighbours = self.find_nearest_neighbours(query, total_predictions)
+        correct_predictions = 0
+        for (idx, code, distance, is_relevant) in neighbours:
+            if is_relevant:
+                correct_predictions += 1
+        total_relevant = sum([1 for (_, _, label) in self.database if query[2] == label])
+        return correct_predictions / total_relevant
 
 
-def calculate_precision_recall_curve(sim_matrix: SimilarityMatrix, query_image_idx: int, image_ids: list[int]):
-    points = []
-    related = sim_matrix.get_related(query_image_idx)
-    fp = 0
-    tp = 0
-    fn = len(related)
-    for idx in image_ids:
-        if idx in related:
-            tp += 1
-            fn -= 1
-        else:
-            fp += 1
-        precision = tp / (tp + fp)
-        recall = tp / (tp + fn)
-
-        points.append((precision, recall))
-
-    return points
+    def calculate_precision_recall(self):
+        pass
 
 
-if __name__ == '__main__':
-    query_results = {}
-    for x in [x for x in range(100)]:
-        query_results[x] = [i for i in range(0, 50000)]
-    
-    fl = FeatureLoader("cifar-10")
-    
-    if fl.training == None:
-        raise Exception("Training subset was null")
+    def average_precision(self, query: (int, List[int], int), total_predictions: int) -> float:
+        neighbours = self.find_nearest_neighbours(query, total_predictions)
+        correct_predictions = 0
+        average_precision = 0
+        for k, (idx, code, distance, is_relevant) in enumerate(neighbours, start=1):
+            if is_relevant:
+                correct_predictions += 1
+                average_precision += correct_predictions / k
 
-    avg = calc_mean_average_precision(SimilarityMatrix.create_matrix(fl.training), query_results)
-    print(avg)
+        # Ensure we divide only be total amount of relevant documents in the top k
+        total_relevant = sum([1 for (_, _, label) in self.database if query[2] == label])
+        if total_relevant > total_predictions:
+            total_relevant = total_predictions
+        self.hit_miss.append(correct_predictions / total_relevant)
+        return average_precision / total_relevant
+
+
+    def calculate_map(self, queries: List[Tuple[int, List[int], int]], total_predictions: int) -> float:
+        mean_ap= 0
+        for i, query in enumerate(queries):
+            mean_ap += self.average_precision(query, total_predictions)
+            print("Calculating mAP for", i, "/", len(queries), end="\r", flush=True)
+
+        return mean_ap / len(queries)
+
+    def mean_average_precision_sh(
+            self,
+            query_code,
+            database_code,
+            query_labels,
+            database_labels,
+            device,
+            topk=None,
+    ):
+        """
+        Calculate mean average precision(map).
+
+        Args:
+            query_code (torch.Tensor): Query data hash code.
+            database_code (torch.Tensor): Database data hash code.
+            query_labels (torch.Tensor): Query data targets, one-hot
+            database_labels (torch.Tensor): Database data targets, one-host
+            device (torch.device): Using CPU or GPU.
+            topk (int): Calculate top k data map.
+
+        Returns:
+            meanAP (float): Mean Average Precision.
+        """
+        num_query = query_labels.shape[0]
+        mean_AP = 0.0
+
+        for i in range(num_query):
+            # Retrieve images from database
+            retrieval = (query_labels[i, :] @ database_labels.t() > 0).float()
+
+            # Calculate hamming distance
+            hamming_dist = 0.5 * (
+                    database_code.shape[1] - query_code[i, :] @ database_code.t()
+            )
+
+            # Arrange position according to hamming distance
+            retrieval = retrieval[torch.argsort(hamming_dist)][:topk]
+
+            # Retrieval count
+            retrieval_cnt = retrieval.sum().int().item()
+
+            # Can not retrieve images
+            if retrieval_cnt == 0:
+                continue
+
+            # Generate score for every position
+            score = torch.linspace(1, retrieval_cnt, retrieval_cnt).to(device)
+
+            # Acquire index
+            index = (torch.nonzero(retrieval == 1).squeeze() + 1.0).float().to(device)
+
+            mean_AP += (score / index).mean()
+
+        mean_AP = mean_AP / num_query
+        return mean_AP
+
+
+    def calculate_metrics(self, queries: List[Tuple[int, List[int], int]], total_predictions: int) -> None:
+        query_db = self.create_database(queries)
+        print("Mean Average Precision:", self.calculate_map(query_db, total_predictions))
+        print("Hit miss: " + str(round(sum(self.hit_miss) / len(self.hit_miss) * 100, 2)) + "%")
+
+
+        database_code = []
+        database_labels = []
+        for (idx, code, label) in self.database:
+            label_array = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            label_array[label] = 1
+            database_code.append(code)
+            database_labels.append(label_array)
+
+        query_code = []
+        query_labels = []
+        for (idx, code, label) in query_db:
+            label_array = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            label_array[label] = 1
+            query_code.append(code)
+            query_labels.append(label_array)
+
+
+        print("Mean Average Precision SH:", self.mean_average_precision_sh(
+            torch.tensor(query_code),
+            torch.tensor(database_code),
+            torch.tensor(query_labels),
+            torch.tensor(database_labels),
+            "cuda",
+            total_predictions
+        ))
+
+
+if __name__ == "__main__":
+    def foo_query(query: List[int]) -> List[int]:
+        return query
+    d = [
+        (0, [1, 1, 0, 0], 1),
+        (1, [1, 0, 0, 0], 2),
+        (2, [0, 0, 0, 0], 3),
+        (3, [1, 1, 1, 0], 2),
+        (4, [1, 1, 1, 1], 1),
+        (5, [0, 1, 0, 1], 2),
+    ]
+    m = MetricsFramework(foo_query, d)
+    n = m.find_nearest_neighbours((6, [1, 0, 1, 0], 2), 6)
+    print("Nearest Neighbours:")
+    for l in n:
+        print(l)
+
+    print("Precision:", m.precision((6, [1, 0, 1, 0], 2), 10))
+    print("Recall:", m.recall((6, [1, 0, 1, 0], 2), 10))
+    print("Average Precision:", m.average_precision((6, [1, 0, 1, 0], 2), 10))
+    print("Mean Average Precision:", m.calculate_map(d, 10))
+
