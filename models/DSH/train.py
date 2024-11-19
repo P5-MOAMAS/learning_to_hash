@@ -1,6 +1,7 @@
 """
 Liu et al., "Deep Supervised Hashing for Fast Image Retrieval"
 """
+import time
 from collections import defaultdict
 import random
 import torch
@@ -88,7 +89,6 @@ class PairDataset(Dataset):
         return x_img, x_target, y_img, y_target, target_equals,
 
 
-
 class Trainer:
     def __init__(self, model, train_dataloader, test_dataloader, dataset: PairDataset, code_size: int, epochs: int):
         self.code_size = code_size
@@ -163,6 +163,8 @@ class Trainer:
         return avg_loss
 
     def train(self):
+        start_time = time.time()
+
         for epoch in range(self.total_epochs):
             self.global_epoch = epoch
             progress_bar = tqdm(
@@ -189,17 +191,22 @@ class Trainer:
             progress_bar.close()
 
             # Evaluate the model at the end of the epoch
-            avg_loss = self.evaluate()
-            print(f"Epoch {epoch + 1}/{self.total_epochs}, Validation Loss: {avg_loss:.4f}")
+            #avg_loss = self.evaluate()
+            #print(f"Epoch {epoch + 1}/{self.total_epochs}, Validation Loss: {avg_loss:.4f}")
+
+            self.best_model_path = f'best_model_{dataset}_{code_size}.pth'
 
             # Save the model if it has the best performance so far
-            if avg_loss < self.best_loss:
-                self.best_loss = avg_loss
+            if self.loss < self.best_loss:
+                self.best_loss = self.loss
                 self.best_epoch = epoch + 1
                 torch.save(self.model.state_dict(), self.best_model_path)
                 print(f"New best model saved with loss {self.best_loss:.4f}")
 
-        print(f"Training complete. Best model saved at {self.best_model_path} with loss {self.best_loss:.4f} from epoch {self.best_epoch}")
+        end_time = time.time()
+        total_time = end_time - start_time
+        print(f"Training complete. Total training time: {total_time:.2f} seconds.")
+        print(f"Training complete. Best model saved at {self.best_model_path} with loss {self.best_loss:.4f} from epoch {self.best_epoch} with time: {end_time:.2f }")
 
 
 def train_model(dataset_name: str, code_size: int, epochs: int):
@@ -254,10 +261,10 @@ def get_image_hash(model_path: str, image: torch.Tensor, dataset_name: str, code
     return model.query_image(image)
 
 if __name__ == '__main__':
-    dataset = 'mnist' # Choose between mnist, cifar or imagenet
-    code_size = 64 # Choose e.g. (8, 16, 32, 64)
-    epochs = 5
-    #train_model(dataset_name=dataset, code_size=code_size, epochs=epochs)
+    dataset = 'cifar' # Choose between mnist, cifar or imagenet
+    code_size = 16 # Choose e.g. (8, 16, 32, 64)
+    epochs = 50
+    train_model(dataset_name=dataset, code_size=code_size, epochs=epochs)
 
     # Example of querying hash code for an image
     test_pair_dataset = PairDataset(DATA_ROOT, dataset, train=False)

@@ -11,7 +11,7 @@ for i in range(len(fl.training)):
     features.append(fl.training[i][1])
 del fl
 
-encode_len = 8
+encode_len = 16
 model = ITQ(encode_len)
 model.fit(features)
 
