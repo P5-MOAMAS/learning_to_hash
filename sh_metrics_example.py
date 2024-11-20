@@ -1,33 +1,33 @@
 # Import Spectral Hashing
 from metrics.metrics_framework import MetricsFramework
 from models.spectral_hashing import SH as SpectralHash
-from metrics import feature_loader
+from metrics.feature_loader import FeatureLoader
 
 import numpy as np
 
 # Load the features from the CIFAR-10 dataset
-fl = feature_loader.FeatureLoader("cifar-10")
-cifar10_validation = fl.validation
-features = []
-for i in range(len(fl.training)):
-    features.append(fl.training[i][1])
+fl = FeatureLoader("cifar-10")
+data = fl.validation
+
+# Flatten the images for compatibility with LSH (each image as a 1D feature vector)
+features = [feature for (_, feature, _) in data]
 
 # Convert the features to a numpy array
 features = np.array(features)
 print("Features shape:", features.shape)
 
-number_of_bits = 16
+k = 9000
+encode_len = [2, 4, 8, 16, 32, 64]
+results = []
+for i in range(len(encode_len)):
+    # Initialize Spectral Hashing with the features data
+    spectral_hash = SpectralHash.SpectralHashing(encode_len[i])
+    spectral_hash.fit(features)
 
-# Initialize Spectral Hashing with the features data
-spectral_hash = SpectralHash.SpectralHashing(number_of_bits)
-spectral_hash.fit(features)
+    metrics_framework = MetricsFramework(spectral_hash.query, data, 2000)
+    mAP = metrics_framework.calculate_metrics(k)
+    results.append(mAP)
 
-# Select a query feature and reshapes so it works with SH
-query_feature = features[0].reshape(1, -1)
-
-# Query Spectral Hashing to find hash code for the query feature
-query_hash_code = spectral_hash.query(query_feature)
-print("Hash codes for query image:", query_hash_code)
-
-metrics_framework = MetricsFramework(spectral_hash.query, fl.training)
-metrics_framework.calculate_metrics(cifar10_validation, 999999)
+print("---------------- Result using k value of", k, "----------------")
+for i in range(len(results)):
+    print(encode_len[i], "bit length result:", round(results[i], 3))

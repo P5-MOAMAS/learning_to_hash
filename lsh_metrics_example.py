@@ -1,49 +1,38 @@
-from torchvision import transforms
 import numpy as np
 
 from metrics.feature_loader import FeatureLoader
 from metrics.metrics_framework import MetricsFramework
 from models.lsh import Lsh
 
-
-# Define transformation: Convert to tensor and normalize
-transform = transforms.Compose(
-    [
-        transforms.Resize((32, 32)),  # Ensure images are of consistent size
-        transforms.ToTensor(),
-    ]
-)
-
 # Load the features from the CIFAR-10 dataset
 fl = FeatureLoader("cifar-10")
-cifar10_validation = fl.validation
-features = []
-for i in range(len(fl.training)):
-    features.append(fl.training[i][1])
+data = fl.validation
 
 # Flatten the images for compatibility with LSH (each image as a 1D feature vector)
+features = [feature for (_, feature, _) in data]
 features = np.array(features)
 
-# Set LSH parameters
-num_tables = 5
-num_bits_per_table = 4
-pca_components = 50
+k = 9000
+encode_len = [2, 4, 8, 16, 32, 64]
+results = []
+for i in range(len(encode_len)):
+    # Set LSH parameters
+    num_tables = 1
+    num_bits_per_table = encode_len[i]
+    pca_components = 50
 
-# Initialize LSH with the features data
-image_lsh = Lsh.LSH(
-    features,
-    num_tables=num_tables,
-    num_bits_per_table=num_bits_per_table,
-    pca_components=pca_components,
-)
+    # Initialize LSH with the features data
+    image_lsh = Lsh.LSH(
+        features,
+        num_tables=num_tables,
+        num_bits_per_table=num_bits_per_table,
+        pca_components=pca_components,
+    )
 
-# Select a query image and remove it from the dataset
-query_image = features[0]
-features = np.delete(features, 0, axis=0)
-print("Removed the query image from the dataset.")
+    metrics_framework = MetricsFramework(image_lsh.query, data, 2000)
+    mAP = metrics_framework.calculate_metrics(k)
+    results.append(mAP)
 
-# Query LSH to find hash codes for the query image
-query_hash_codes = image_lsh.query(query_image)
-print("Hash codes for query image:", query_hash_codes)
-metrics_framework = MetricsFramework(image_lsh.query, cifar10_validation)
-metrics_framework.calculate_metrics(cifar10_validation, 10)
+print("---------------- Result using k value of", k, "----------------")
+for i in range(len(results)):
+    print(encode_len[i], "bit length result:", round(results[i], 3))
