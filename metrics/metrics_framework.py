@@ -2,13 +2,38 @@ from collections.abc import Callable
 from typing import List, Tuple
 
 import numpy as np
-import torch
+
+from metrics.data_loader import Dataloader
+
 
 class MetricsFramework:
-    def __init__(self, query_func: Callable, dataset:  List[Tuple[int, List[int], int]]):
+    def __init__(self, query_func: Callable, dataset:  List[Tuple[int, List[int], int]] | Dataloader, query_size: int):
         self.query_func = query_func
-        self.database = self.create_database(dataset)
+
         self.hit_miss = []
+
+        if dataset is Dataloader:
+            self.database, self.queries = self.create_database_deep(dataset)
+        else:
+            self.database = self.create_database(dataset)
+            self.queries = self.create_database(dataset[:query_size])
+
+
+    """
+    Creates a database, a list of tuples containing (id, hash-code, label) for a dataloader
+    """
+    def create_database_deep(self, dataloader: Dataloader):
+        database = []
+        queries = []
+        for i in range(len(dataloader)):
+            data = dataloader[i]
+            for i, (idx, feature, label) in enumerate(data):
+                code = self.query_func(feature)
+                # Ensure code ís 1D and uses 0 instead of -1
+                code = np.asarray(code).flatten()
+                code[code == -1] = 0
+                database.append((idx, code, label))
+        return database, queries
 
 
     """
@@ -27,6 +52,7 @@ class MetricsFramework:
             database.append((idx, code, label))
 
         return database
+
 
     """
     Returns a list of length total_predictions, containing tuples of (id, hash-code, hamming distance, if labels are equal)
@@ -101,102 +127,22 @@ class MetricsFramework:
         return average_precision / total_relevant
 
 
-    def calculate_map(self, queries: List[Tuple[int, List[int], int]], total_predictions: int) -> float:
+    def calculate_map(self, total_predictions: int) -> float:
         mean_ap= 0
-        for i, query in enumerate(queries):
+        for i, query in enumerate(self.queries):
             mean_ap += self.average_precision(query, total_predictions)
-            print("Calculating mAP for", i, "/", len(queries), end="\r", flush=True)
+            print("Calculating mAP for", i, "/", len(self.queries), end="\r", flush=True)
 
-        return mean_ap / len(queries)
-
-    def mean_average_precision_sh(
-            self,
-            query_code,
-            database_code,
-            query_labels,
-            database_labels,
-            device,
-            topk=None,
-    ):
-        """
-        Calculate mean average precision(map).
-
-        Args:
-            query_code (torch.Tensor): Query data hash code.
-            database_code (torch.Tensor): Database data hash code.
-            query_labels (torch.Tensor): Query data targets, one-hot
-            database_labels (torch.Tensor): Database data targets, one-host
-            device (torch.device): Using CPU or GPU.
-            topk (int): Calculate top k data map.
-
-        Returns:
-            meanAP (float): Mean Average Precision.
-        """
-        num_query = query_labels.shape[0]
-        mean_AP = 0.0
-
-        for i in range(num_query):
-            # Retrieve images from database
-            retrieval = (query_labels[i, :] @ database_labels.t() > 0).float()
-
-            # Calculate hamming distance
-            hamming_dist = 0.5 * (
-                    database_code.shape[1] - query_code[i, :] @ database_code.t()
-            )
-
-            # Arrange position according to hamming distance
-            retrieval = retrieval[torch.argsort(hamming_dist)][:topk]
-
-            # Retrieval count
-            retrieval_cnt = retrieval.sum().int().item()
-
-            # Can not retrieve images
-            if retrieval_cnt == 0:
-                continue
-
-            # Generate score for every position
-            score = torch.linspace(1, retrieval_cnt, retrieval_cnt).to(device)
-
-            # Acquire index
-            index = (torch.nonzero(retrieval == 1).squeeze() + 1.0).float().to(device)
-
-            mean_AP += (score / index).mean()
-
-        mean_AP = mean_AP / num_query
-        return mean_AP
+        return mean_ap / len(self.queries)
 
 
-    def calculate_metrics(self, queries: List[Tuple[int, List[int], int]], total_predictions: int) -> None:
-        query_db = self.create_database(queries)
-        print("Mean Average Precision:", self.calculate_map(query_db, total_predictions))
-        print("Hit miss: " + str(round(sum(self.hit_miss) / len(self.hit_miss) * 100, 2)) + "%")
+    def calculate_metrics(self, total_predictions: int) -> float:
+        mAP = self.calculate_map(total_predictions)
+        print("Mean Average Precision:", mAP)
+        correct_ratio = sum(self.hit_miss) / len(self.hit_miss)
+        print("Avg. correct img: " + str(round(correct_ratio * 100, 2)) + "% " + str(round(correct_ratio * total_predictions, 3)) + "/" + str(total_predictions))
 
-
-        database_code = []
-        database_labels = []
-        for (idx, code, label) in self.database:
-            label_array = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-            label_array[label] = 1
-            database_code.append(code)
-            database_labels.append(label_array)
-
-        query_code = []
-        query_labels = []
-        for (idx, code, label) in query_db:
-            label_array = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-            label_array[label] = 1
-            query_code.append(code)
-            query_labels.append(label_array)
-
-
-        print("Mean Average Precision SH:", self.mean_average_precision_sh(
-            torch.tensor(query_code),
-            torch.tensor(database_code),
-            torch.tensor(query_labels),
-            torch.tensor(database_labels),
-            "cuda",
-            total_predictions
-        ))
+        return mAP
 
 
 if __name__ == "__main__":
