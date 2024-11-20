@@ -3,7 +3,6 @@ import sys
 from random import shuffle
 from typing import List, Callable
 
-import psutil
 import torch
 import numpy as np
 from torchvision import datasets
@@ -62,6 +61,7 @@ class FeatureLoader:
 
         image_labels = mnist.targets
         image_features = self.load_features(6)
+        del mnist
         return image_features, image_labels
 
 
@@ -110,12 +110,6 @@ def unpickle(file):
 
 
 if __name__ == '__main__':
-    def gen_key(some):
-        return 0
-
-    process = psutil.Process()
-    mem_before = process.memory_info().rss
-
     fl = FeatureLoader("mnist")
     if fl.training == None or fl.validation == None or fl.test == None:
         raise Exception("One of the sets were null")
@@ -123,9 +117,4 @@ if __name__ == '__main__':
     print("Training:", len(fl.training), sep=" ")
     print("Validation:", len(fl.validation), sep=" ")
     print("Test:", len(fl.test), sep=" ")
-
-    mem_after = process.memory_info().rss
-    print("Before: " + str(mem_before))
-    print("After: " + str(mem_after))
-    print("Delta: " + str(mem_after - mem_before))
 
