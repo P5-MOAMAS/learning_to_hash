@@ -1,6 +1,6 @@
 import torch
 from models.deep.deep_tools.tools import cifar_dataset
-from models.deep.deep_tools.network import AlexNet
+from models.deep.unsupervised_image_bit import BiHalfModelUnsupervised
 from metrics.calc_metrics import calculate_metrics
 from torchvision import transforms
 
@@ -14,7 +14,7 @@ if __name__ == '__main__':
     config = {
             "resize_size": 256,
             "crop_size": 224,
-            "batch_size": 48,
+            "batch_size": 8,
             # "dataset": "cifar10",
             "dataset": "cifar10-1",
             # "dataset": "cifar10-2",
@@ -24,11 +24,10 @@ if __name__ == '__main__':
         }
         
     # Initialize the AlexNet model with x bits
-    hashnet_alexnet_cifar10 = AlexNet(config["batch_size"]).to(config["device"])
+    bihalf_cifar10 = BiHalfModelUnsupervised(config["batch_size"]).to(config["device"])
 
     # Load the model from the saved state
-    hashnet_alexnet_cifar10.load_state_dict(torch.load("save\HashNet\cifar10-1_48bits_0.419\model.pt", map_location=config["device"]))
-    #hashnet_alexnet_cifar10.eval()
+    bihalf_cifar10.load_state_dict(torch.load("save\BiHalf\cifar10-1_8bits_0.363\model.pt", map_location=config["device"]))
 
     # Get the data loaders for the CIFAR-10 dataset
     train_loader, test_loader, db_loader, _, _, _ = cifar_dataset(config)
@@ -55,10 +54,10 @@ if __name__ == '__main__':
     query_image = images[0].to(config["device"])
 
     # Find hash code for the query image, uses CUDA
-    hash_code = hashnet_alexnet_cifar10.query_with_cuda(query_image)
+    hash_code = bihalf_cifar10.query_with_cuda(query_image)
     
     # Print the hash code
     print(hash_code)
     
     # Calculate the metrics
-    calculate_metrics(hashnet_alexnet_cifar10.query_with_cuda, images, True)
+    calculate_metrics(bihalf_cifar10.query_with_cuda, images, True)
