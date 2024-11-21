@@ -30,8 +30,9 @@ class Dataloader:
     def cifar_to_tensor(data: List[bytes]) -> List:
         images = []
         length = len(data)
+        trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
         for i, d in enumerate(data, start=1):
-            images.append(functional.pil_to_tensor(Image.frombytes("RGB", (32, 32), d)))
+            images.append(trans(Image.frombytes("RGB", (32, 32), d)))
             print("Converting bytes to image,", i, "of", length, end="\r", flush=True)
         print()
 
@@ -57,7 +58,7 @@ class Dataloader:
 
 
     @staticmethod
-    def __init_mnist__(self):
+    def __init_mnist__():
         mnist = datasets.FashionMNIST(
             root="data",
             train=True,
@@ -69,7 +70,6 @@ class Dataloader:
         return mnist.data, image_labels
 
 
-    @staticmethod
     def __init_cifar__(self):
         # Get all features from all images in CIFAR
         image_data = []

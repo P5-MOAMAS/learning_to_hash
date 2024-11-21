@@ -8,15 +8,15 @@ fl = FeatureLoader("cifar-10", False)
 data = fl.training
 
 features = [feature for (_, feature, _) in data]
-k = 9000
+k = 100
 
-encode_len = [2, 4, 8, 16, 32, 64]
+encode_len = [16]
 results = []
 for i in range(len(encode_len)):
     model = ITQ(encode_len[i])
     model.fit(features)
 
-    metrics_framework = MetricsFramework(model.encode_single, data, 2000)
+    metrics_framework = MetricsFramework(model.encode_single, data, 1000)
     mAP = metrics_framework.calculate_metrics(k)
     results.append(mAP)
 

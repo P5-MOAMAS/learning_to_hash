@@ -9,6 +9,7 @@ class MetricsFramework:
         self.query_func = query_func
 
         self.hit_miss = []
+        self.relevant = 0
 
         self.database = self.create_database(dataset)
         self.queries = self.create_database(dataset[:query_size])
@@ -22,13 +23,14 @@ class MetricsFramework:
             RuntimeError("Dataset is empty")
 
         database = []
-        for i, (idx, feature, label) in enumerate(dataset):
+        for i, (idx, feature, label) in enumerate(dataset, start=1):
             code = self.query_func(feature)
             # Ensure code ís 1D and uses 0 instead of -1
             code = np.asarray(code).flatten()
             code[code == -1] = 0
             database.append((idx, code, label))
-
+            print("Creating database, image", i, "of", len(dataset), end="\r", flush=True)
+        print()
         return database
 
 
@@ -101,6 +103,7 @@ class MetricsFramework:
         total_relevant = sum([1 for (_, _, label) in self.database if query[2] == label])
         if total_relevant > total_predictions:
             total_relevant = total_predictions
+        self.relevant = total_relevant
         self.hit_miss.append(correct_predictions / total_relevant)
         return average_precision / total_relevant
 
@@ -118,7 +121,7 @@ class MetricsFramework:
         mAP = self.calculate_map(total_predictions)
         print("Mean Average Precision:", mAP)
         correct_ratio = sum(self.hit_miss) / len(self.hit_miss)
-        print("Avg. correct img: " + str(round(correct_ratio * 100, 2)) + "% " + str(round(correct_ratio * total_predictions, 3)) + "/" + str(total_predictions))
+        print("Avg. correct img: " + str(round(correct_ratio * 100, 2)) + "% " + str(round(correct_ratio * self.relevant, 3)) + "/" + str(self.relevant))
 
         return mAP
 

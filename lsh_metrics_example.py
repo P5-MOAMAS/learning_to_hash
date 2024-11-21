@@ -12,8 +12,8 @@ data = fl.training
 features = [feature for (_, feature, _) in data]
 features = np.array(features)
 
-k = 9000
-encode_len = [2, 4, 8, 16, 32, 64]
+k = 100
+encode_len = [16]
 results = []
 for i in range(len(encode_len)):
     # Set LSH parameters
@@ -29,7 +29,7 @@ for i in range(len(encode_len)):
         pca_components=pca_components,
     )
 
-    metrics_framework = MetricsFramework(image_lsh.query, data, 2000)
+    metrics_framework = MetricsFramework(image_lsh.query, data, 1000)
     mAP = metrics_framework.calculate_metrics(k)
     results.append(mAP)
 

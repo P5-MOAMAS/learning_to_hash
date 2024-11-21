@@ -16,15 +16,15 @@ features = [feature for (_, feature, _) in data]
 features = np.array(features)
 print("Features shape:", features.shape)
 
-k = 9000
-encode_len = [2, 4, 8, 16, 32, 64]
+k = 100
+encode_len = [16]
 results = []
 for i in range(len(encode_len)):
     # Initialize Spectral Hashing with the features data
     spectral_hash = SpectralHash.SpectralHashing(encode_len[i])
     spectral_hash.fit(features)
 
-    metrics_framework = MetricsFramework(spectral_hash.query, data, 2000)
+    metrics_framework = MetricsFramework(spectral_hash.query, data, 1000)
     mAP = metrics_framework.calculate_metrics(k)
     results.append(mAP)
 
