@@ -11,7 +11,7 @@ from torchvision.datasets import MNIST, ImageNet, CIFAR10
 from torch.utils.data import DataLoader, Dataset
 import torchvision.transforms as transforms
 from torch.utils.tensorboard import SummaryWriter
-from .model import LiuDSH
+from model import LiuDSH
 from tqdm import tqdm  # Add tqdm for progress bar
 # hyper-parameters
 DATA_ROOT = 'data_out'
@@ -108,7 +108,7 @@ class Trainer:
 
         self.best_loss = float('inf')  # Initialize best loss to a high value
         self.best_epoch = -1  # To track which epoch had the best model
-        self.best_model_path = "best_model.pth"  # File name for saving the best model
+        self.best_epoch_time = 0
 
     def generate_dummy_input(self):
         return torch.randn(1, *self.input_shape, device=device)
@@ -164,9 +164,11 @@ class Trainer:
 
     def train(self):
         start_time = time.time()
+        cumulative_time = 0
 
         for epoch in range(self.total_epochs):
             self.global_epoch = epoch
+            epoch_start = time.time()
             progress_bar = tqdm(
                 total=len(self.train_dataloader),
                 desc=f"Epoch {epoch + 1:02d}",
@@ -189,6 +191,12 @@ class Trainer:
                 progress_bar.update(1)
 
             progress_bar.close()
+            epoch_end = time.time()
+            epoch_time = epoch_end - epoch_start
+            cumulative_time += epoch_time
+
+            print(f"Epoch {epoch + 1}/{self.total_epochs} completed.")
+            print(f"Loss: {self.loss:.4f}, Time elapsed so far: {cumulative_time:.2f} seconds")
 
             # Evaluate the model at the end of the epoch
             #avg_loss = self.evaluate()
@@ -200,13 +208,15 @@ class Trainer:
             if self.loss < self.best_loss:
                 self.best_loss = self.loss
                 self.best_epoch = epoch + 1
+                self.best_epoch_time = cumulative_time
                 torch.save(self.model.state_dict(), self.best_model_path)
                 print(f"New best model saved with loss {self.best_loss:.4f}")
+
 
         end_time = time.time()
         total_time = end_time - start_time
         print(f"Training complete. Total training time: {total_time:.2f} seconds.")
-        print(f"Training complete. Best model saved at {self.best_model_path} with loss {self.best_loss:.4f} from epoch {self.best_epoch} with time: {end_time:.2f }")
+        print(f"Best model saved at {self.best_model_path} with loss {self.best_loss:.4f} from epoch {self.best_epoch} (time: {self.best_epoch_time:.2f} seconds).")
 
 
 def train_model(dataset_name: str, code_size: int, epochs: int):
@@ -269,7 +279,7 @@ if __name__ == '__main__':
     # Example of querying hash code for an image
     test_pair_dataset = PairDataset(DATA_ROOT, dataset, train=False)
     test_image, _ = test_pair_dataset[0][:2]
-    hash_code = get_image_hash('best_model.pth', test_image, dataset, code_size)
+    hash_code = get_image_hash('best_model_cifar_16.pth', test_image, dataset, code_size)
     print("Hash Code for the test image:", hash_code)
 
     #For loading the model:

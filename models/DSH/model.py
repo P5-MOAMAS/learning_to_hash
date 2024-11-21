@@ -38,7 +38,7 @@ class ResBlock(nn.Module):
     def forward(self, x):
         # Store the input
         identity = x
-        # Pass input through the main network of convolutions and activations
+        # Pass input through the network
         out = self.net(x)
         # If downsampling is needed, apply the downsampling layer to the input
         identity = self.downsample_layer(x) if self.do_downsample else identity
