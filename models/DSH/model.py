@@ -123,6 +123,7 @@ class LiuDSH(nn.Module):
 
     def query_image(self, image: torch.Tensor):
         "Computes and returns a binary hashcode for 1 image"
+
         self.eval()
         with torch.no_grad():
             embedding=self.forward(image.unsqueeze(0))

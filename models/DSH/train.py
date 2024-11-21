@@ -11,7 +11,7 @@ from torchvision.datasets import MNIST, ImageNet, CIFAR10
 from torch.utils.data import DataLoader, Dataset
 import torchvision.transforms as transforms
 from torch.utils.tensorboard import SummaryWriter
-from model import LiuDSH
+from .model import LiuDSH
 from tqdm import tqdm  # Add tqdm for progress bar
 # hyper-parameters
 DATA_ROOT = 'data_out'
