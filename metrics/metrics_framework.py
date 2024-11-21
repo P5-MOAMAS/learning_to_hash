@@ -3,37 +3,15 @@ from typing import List, Tuple
 
 import numpy as np
 
-from metrics.data_loader import Dataloader
-
 
 class MetricsFramework:
-    def __init__(self, query_func: Callable, dataset:  List[Tuple[int, List[int], int]] | Dataloader, query_size: int):
+    def __init__(self, query_func: Callable, dataset:  List[Tuple[int, List[int], int]], query_size: int):
         self.query_func = query_func
 
         self.hit_miss = []
 
-        if dataset is Dataloader:
-            self.database, self.queries = self.create_database_deep(dataset)
-        else:
-            self.database = self.create_database(dataset)
-            self.queries = self.create_database(dataset[:query_size])
-
-
-    """
-    Creates a database, a list of tuples containing (id, hash-code, label) for a dataloader
-    """
-    def create_database_deep(self, dataloader: Dataloader):
-        database = []
-        queries = []
-        for i in range(len(dataloader)):
-            data = dataloader[i]
-            for i, (idx, feature, label) in enumerate(data):
-                code = self.query_func(feature)
-                # Ensure code ís 1D and uses 0 instead of -1
-                code = np.asarray(code).flatten()
-                code[code == -1] = 0
-                database.append((idx, code, label))
-        return database, queries
+        self.database = self.create_database(dataset)
+        self.queries = self.create_database(dataset[:query_size])
 
 
     """
