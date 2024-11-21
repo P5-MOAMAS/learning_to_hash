@@ -10,12 +10,14 @@ from torchvision.transforms import ToTensor
 
 
 class FeatureLoader:
-    def __init__(self, dataset_name: str):
+    def __init__(self, dataset_name: str, split_data: bool = True):
         super().__init__()
 
         self.training = None
         self.test = None
         self.validation = None
+
+        self.split_data = split_data
 
         self.dataset_name = dataset_name
         match dataset_name:
@@ -93,14 +95,16 @@ class FeatureLoader:
 
         # Shuffle data before splitting
         shuffle(idx_feature_label)
+        if self.split_data:
+            # Splitting dataset into 70% training, 15% testing, and 15% validation
+            training_len = round(len(idx_feature_label) * 0.7)
+            valid_test_len = (len(idx_feature_label) - training_len) // 2
 
-        # Splitting dataset into 70% training, 15% testing, and 15% validation
-        training_len = round(len(idx_feature_label) * 0.7)
-        valid_test_len = (len(idx_feature_label) - training_len) // 2
-
-        self.training = idx_feature_label[:training_len]
-        self.test = idx_feature_label[training_len:training_len + valid_test_len]
-        self.validation = idx_feature_label[training_len + valid_test_len:]
+            self.training = idx_feature_label[:training_len]
+            self.test = idx_feature_label[training_len:training_len + valid_test_len]
+            self.validation = idx_feature_label[training_len + valid_test_len:]
+        else:
+            self.training, self.test, self.validation = idx_feature_label
 
 
 def unpickle(file):

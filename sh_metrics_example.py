@@ -6,8 +6,8 @@ from metrics.feature_loader import FeatureLoader
 import numpy as np
 
 # Load the features from the CIFAR-10 dataset
-fl = FeatureLoader("cifar-10")
-data = fl.validation
+fl = FeatureLoader("cifar-10", False)
+data = fl.training
 
 # Flatten the images for compatibility with LSH (each image as a 1D feature vector)
 features = [feature for (_, feature, _) in data]

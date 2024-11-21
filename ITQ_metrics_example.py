@@ -1,11 +1,11 @@
-from metrics import feature_loader
+from metrics.feature_loader import FeatureLoader
 
 from metrics.metrics_framework import MetricsFramework
 from models.ITQ.hashing.itq_model import *
 
 # Load the features from the CIFAR-10 dataset
-fl = feature_loader.FeatureLoader("cifar-10")
-data = fl.validation
+fl = FeatureLoader("cifar-10", False)
+data = fl.training
 
 features = [feature for (_, feature, _) in data]
 k = 9000
