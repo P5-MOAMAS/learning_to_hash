@@ -104,7 +104,7 @@ class FeatureLoader:
             self.test = idx_feature_label[training_len:training_len + valid_test_len]
             self.validation = idx_feature_label[training_len + valid_test_len:]
         else:
-            self.training, self.test, self.validation = idx_feature_label
+            self.training = self.test = self.validation = idx_feature_label
 
 
 def unpickle(file):
