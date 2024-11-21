@@ -313,7 +313,7 @@ def validate(config, Best_mAP, test_loader, dataset_loader, net, bit, epoch, num
     if mAP > Best_mAP:
         Best_mAP = mAP
         if "save_path" in config:
-            save_path = os.path.join(config["save_path"], f'{config["dataset"]}_{bit}bits_{mAP}')
+            save_path = os.path.join(config["save_path"], f'{config["dataset"]}_{bit}bits_{mAP.round(3)}')
             os.makedirs(save_path, exist_ok=True)
             print("save in ", save_path)
             np.save(os.path.join(save_path, "tst_label.npy"), tst_label.numpy())
