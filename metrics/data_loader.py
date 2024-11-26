@@ -5,7 +5,8 @@ from typing import List
 
 from PIL import Image
 from torchvision import datasets
-from torchvision.transforms import ToTensor, transforms, functional
+from torchvision.transforms import ToTensor, transforms
+
 
 
 class Dataloader:
@@ -13,7 +14,6 @@ class Dataloader:
         super().__init__()
 
         self.data = None
-
         self.dataset_name = dataset_name
         match dataset_name:
             case "cifar-10":
@@ -26,16 +26,15 @@ class Dataloader:
         self.load_data_set()
 
 
-    @staticmethod
-    def cifar_to_tensor(data: List[bytes]) -> List:
+
+    def cifar_to_tensor(self, data: List[bytes]) -> List:
         images = []
         length = len(data)
-        trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
         for i, d in enumerate(data, start=1):
-            images.append(trans(Image.frombytes("RGB", (32, 32), d)))
+            img = Image.frombytes("RGB", (32, 32), d)
+            images.append(img)
             print("Converting bytes to image,", i, "of", length, end="\r", flush=True)
         print()
-
         return images
 
 
