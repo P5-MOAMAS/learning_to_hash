@@ -9,7 +9,6 @@ import numpy as np
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-
 # HashNet(ICCV2017)
 # paper [HashNet: Deep Learning to Hash by Continuation](http://openaccess.thecvf.com/content_ICCV_2017/papers/Cao_HashNet_Deep_Learning_ICCV_2017_paper.pdf)
 # code [HashNet caffe and pytorch](https://github.com/thuml/HashNet)
@@ -27,7 +26,7 @@ def get_config():
         "net": AlexNet,
         # "net":ResNet,
         # "dataset": "cifar10",
-        "dataset": "cifar10-1",
+        #"dataset": "cifar10-1",
         # "dataset": "cifar10-2",
         # "dataset": "coco",
         # "dataset": "mirflickr",
@@ -35,13 +34,14 @@ def get_config():
         # "dataset": "imagenet",
         # "dataset": "nuswide_21",
         # "dataset": "nuswide_21_m",
-        # "dataset": "nuswide_81_m",
+         "dataset": "nuswide_81_m",
+        #"dataset": "mnist",
         "epoch": 100,
         "test_map": 5,
         "save_path": "save/HashNet",
         # "device":torch.device("cpu"),
          "device": torch.device("cuda:0"),
-        "bit_list": [64],
+        "bit_list": [8],
     }
     config = config_dataset(config)
     return config

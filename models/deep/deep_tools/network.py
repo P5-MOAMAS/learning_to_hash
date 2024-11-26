@@ -13,7 +13,7 @@ class AlexNet(nn.Module):
         self.features = model_alexnet.features
         
         # Fix for MNIST specifically
-        self.features[0] = nn.Conv2d(1, 64, kernel_size=11, stride=4, padding=2)
+        #self.features[0] = nn.Conv2d(1, 64, kernel_size=11, stride=4, padding=2)
         
         cl1 = nn.Linear(256 * 6 * 6, 4096)
         cl1.weight = model_alexnet.classifier[1].weight

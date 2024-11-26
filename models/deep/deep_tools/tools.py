@@ -44,9 +44,9 @@ def config_dataset(config):
     if config["dataset"] == "voc2012":
         config["data_path"] = "/dataset/"
     config["data"] = {
-        "train_set": {"list_path": "./data/" + config["dataset"] + "/train.txt", "batch_size": config["batch_size"]},
-        "database": {"list_path": "./data/" + config["dataset"] + "/database.txt", "batch_size": config["batch_size"]},
-        "test": {"list_path": "./data/" + config["dataset"] + "/test.txt", "batch_size": config["batch_size"]}}
+        "train_set": {"list_path": "learning_to_hash/models/deep/data/" + config["dataset"] + "/train.txt", "batch_size": config["batch_size"]},
+        "database": {"list_path": "learning_to_hash/models/deep/data/" + config["dataset"] + "/database.txt", "batch_size": config["batch_size"]},
+        "test": {"list_path": "learning_to_hash/models/deep/data/" + config["dataset"] + "/test.txt", "batch_size": config["batch_size"]}}
     return config
 
 class ImageList(object):
