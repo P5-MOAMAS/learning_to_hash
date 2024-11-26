@@ -1,13 +1,11 @@
 import pickle
 import sys
-from random import shuffle
-from typing import List, Callable
+from typing import List
 
 import torch
 import numpy as np
 from torchvision import datasets
 from torchvision.transforms import ToTensor
-
 
 class FeatureLoader:
     def __init__(self, dataset_name: str, split_data: bool = True):
@@ -61,7 +59,10 @@ class FeatureLoader:
             transform=ToTensor(),
         )
 
-        image_labels = mnist.targets
+        image_labels = []
+        for labels in mnist.targets.numpy():
+            image_labels.append(labels)
+
         image_features = self.load_features(6)
         del mnist
         return image_features, image_labels
@@ -93,8 +94,6 @@ class FeatureLoader:
         idx_feature_label = [(id, feature, label) for id, (feature, label) in
                              enumerate(zip(image_features, image_labels))]
 
-        # Shuffle data before splitting
-        shuffle(idx_feature_label)
         if self.split_data:
             # Splitting dataset into 70% training, 15% testing, and 15% validation
             training_len = round(len(idx_feature_label) * 0.7)
