@@ -1,5 +1,5 @@
-from tools import *
-from network import *
+from deep_tools.tools import *
+from deep_tools.network import *
 
 import os
 import torch
