@@ -36,12 +36,12 @@ def get_config():
         # "dataset": "nuswide_21",
         # "dataset": "nuswide_21_m",
         # "dataset": "nuswide_81_m",
-        "epoch": 1,
-        "test_map": 1,
+        "epoch": 100,
+        "test_map": 5,
         "save_path": "save/HashNet",
         # "device":torch.device("cpu"),
          "device": torch.device("cuda:0"),
-        "bit_list": [48],
+        "bit_list": [64],
     }
     config = config_dataset(config)
     return config
