@@ -30,6 +30,9 @@ def config_dataset(config):
     elif config["dataset"] == "voc2012":
         config["topK"] = -1
         config["n_class"] = 20
+    elif config["dataset"] == "mnist":
+        config["topK"] = -1
+        config["n_class"] = 10
 
     config["data_path"] = "/dataset/" + config["dataset"] + "/"
     if config["dataset"] == "nuswide_21":
@@ -76,6 +79,14 @@ def image_transform(resize_size, crop_size, data_set):
 
 
 class MyCIFAR10(dsets.CIFAR10):
+    def __getitem__(self, index):
+        img, target = self.data[index], self.targets[index]
+        img = Image.fromarray(img)
+        img = self.transform(img)
+        target = np.eye(10, dtype=np.int8)[np.array(target)]
+        return img, target, index
+    
+class MyMNIST(dsets.MNIST):
     def __getitem__(self, index):
         img, target = self.data[index], self.targets[index]
         img = Image.fromarray(img)
@@ -173,11 +184,92 @@ def cifar_dataset(config):
 
     return train_loader, test_loader, database_loader, \
            train_index.shape[0], test_index.shape[0], database_index.shape[0]
+           
+def mnist_dataset(config):
+    batch_size = config["batch_size"]
 
+    train_size = 500
+    test_size = 100
+
+    transform = transforms.Compose([
+        transforms.Resize(config["crop_size"]),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5], [0.5])
+    ])
+    mnist_dataset_root = '/dataset/mnist/'
+    # Dataset
+    train_dataset = MyMNIST(root=mnist_dataset_root,
+                              train=True,
+                              transform=transform,
+                              download=True)
+
+    test_dataset = MyMNIST(root=mnist_dataset_root,
+                             train=False,
+                             transform=transform)
+
+    database_dataset = MyMNIST(root=mnist_dataset_root,
+                                 train=False,
+                                 transform=transform)
+
+    X = np.concatenate((train_dataset.data, test_dataset.data))
+    L = np.concatenate((np.array(train_dataset.targets), np.array(test_dataset.targets)))
+
+    first = True
+    for label in range(10):
+        index = np.where(L == label)[0]
+
+        N = index.shape[0]
+        perm = np.random.permutation(N)
+        index = index[perm]
+
+        if first:
+            test_index = index[:test_size]
+            train_index = index[test_size: train_size + test_size]
+            database_index = index[train_size + test_size:]
+        else:
+            test_index = np.concatenate((test_index, index[:test_size]))
+            train_index = np.concatenate((train_index, index[test_size: train_size + test_size]))
+            database_index = np.concatenate((database_index, index[train_size + test_size:]))
+        first = False
+
+    if config["dataset"] == "mnist":
+        # test:1000, train:5000, database:59000
+        database_index = np.concatenate((train_index, database_index))
+
+    train_dataset.data = X[train_index]
+    train_dataset.targets = L[train_index]
+    test_dataset.data = X[test_index]
+    test_dataset.targets = L[test_index]
+    database_dataset.data = X[database_index]
+    database_dataset.targets = L[database_index]
+
+    print("train_dataset", train_dataset.data.shape[0])
+    print("test_dataset", test_dataset.data.shape[0])
+    print("database_dataset", database_dataset.data.shape[0])
+
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
+                                               batch_size=batch_size,
+                                               shuffle=True,
+                                               num_workers=4)
+
+    test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
+                                              batch_size=batch_size,
+                                              shuffle=False,
+                                              num_workers=4)
+
+    database_loader = torch.utils.data.DataLoader(dataset=database_dataset,
+                                                  batch_size=batch_size,
+                                                  shuffle=False,
+                                                  num_workers=4)
+
+    return train_loader, test_loader, database_loader, \
+           train_index.shape[0], test_index.shape[0], database_index.shape[0]
 
 def get_data(config):
     if "cifar" in config["dataset"]:
         return cifar_dataset(config)
+    elif "mnist" in config["dataset"]:
+        return mnist_dataset(config)
 
     dsets = {}
     dset_loaders = {}
