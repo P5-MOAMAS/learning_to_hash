@@ -2,17 +2,23 @@ from collections.abc import Callable
 from typing import List, Tuple
 
 import numpy as np
+from torchvision.transforms.v2 import Transform
 
 
 class MetricsFramework:
-    def __init__(self, query_func: Callable, dataset:  List[Tuple[int, List[int], int]], query_size: int):
+    def __init__(self, query_func: Callable, dataset:  List[Tuple[int, List[int], int]], query_size: int, trans: Transform = None, multi_encoder: bool = False, debug: bool = False):
         self.query_func = query_func
 
         self.hit_miss = []
         self.relevant = 0
-
-        self.database = self.create_database(dataset)
-        self.queries = self.create_database(dataset[:query_size])
+        self.transform = trans
+        self.debug = debug
+        if multi_encoder:
+            self.database = self.create_database_multi(dataset)
+            self.queries = self.create_database_multi(dataset[:query_size])
+        else:
+            self.database = self.create_database(dataset)
+            self.queries = self.create_database(dataset[:query_size])
 
 
     """
@@ -21,16 +27,60 @@ class MetricsFramework:
     def create_database(self, dataset: List[Tuple[int, List[int], int]]) -> List[Tuple[int, List[int], int]]:
         if len(dataset) == 0:
             RuntimeError("Dataset is empty")
-
+        ids = []
+        labels = []
         database = []
         for i, (idx, feature, label) in enumerate(dataset, start=1):
+            if self.transform is not None:
+                feature = self.transform(feature)
             code = self.query_func(feature)
             # Ensure code ís 1D and uses 0 instead of -1
             code = np.asarray(code).flatten()
             code[code == -1] = 0
             database.append((idx, code, label))
+            ids.append(idx)
+            labels.append(label)
             print("Creating database, image", i, "of", len(dataset), end="\r", flush=True)
         print()
+        if self.debug:
+            print("------------- Database creation -------------")
+            print("Split dataset (Features removed):", ids, labels)
+            print("Generated database:", database)
+        return database
+
+
+    """
+    Creates a database, a list of tuples containing (id, hash-code, label) for each item in the dataset
+    """
+    def create_database_multi(self, dataset: List[Tuple[int, List[int], int]]) -> List[Tuple[int, List[int], int]]:
+        if len(dataset) == 0:
+            RuntimeError("Dataset is empty")
+
+        database = []
+        features = []
+        ids = []
+        labels = []
+        for i, (idx, feature, label) in enumerate(dataset, start=1):
+            if self.transform is not None:
+                feature = self.transform(feature)
+            features.append(feature)
+            ids.append(idx)
+            labels.append(label)
+        codes = self.query_func(features)
+
+        for i, code in enumerate(codes):
+            # Ensure code ís 1D and uses 0 instead of -1
+            code = np.asarray(code).flatten()
+            code[code == -1] = 0
+            database.append((ids[i], code, labels[i]))
+            print("Creating database, image", i + 1, "of", len(dataset), end="\r", flush=True)
+        print()
+        if self.debug:
+            print("------------- Database creation -------------")
+            print("Split dataset (Features removed):", ids, labels)
+            print("Generated codes:", codes)
+            print("Generated database:", database)
+
         return database
 
 
@@ -57,9 +107,13 @@ class MetricsFramework:
         predictions = [
             (self.database[i][0], self.database[i][1], distances[i], is_relevant[i]) for i in top_indices
         ]
-
+        if self.debug:
+            print("------------- Nearest neighbours -------------")
+            print("Is relevant:", is_relevant)
+            print("Distances:", distances)
+            print("Top index:", top_indices)
+            print("Predictions:", predictions)
         return predictions
-
 
     """
     Returns the precision of a given query for a maximum of total_predictions
@@ -110,9 +164,10 @@ class MetricsFramework:
 
     def calculate_map(self, total_predictions: int) -> float:
         mean_ap= 0
-        for i, query in enumerate(self.queries):
+        for i, query in enumerate(self.queries, start=1):
             mean_ap += self.average_precision(query, total_predictions)
             print("Calculating mAP for", i, "/", len(self.queries), end="\r", flush=True)
+        print()
 
         return mean_ap / len(self.queries)
 
