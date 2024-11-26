@@ -1,5 +1,5 @@
-from models.deep.deep_tools.tools import *
-from models.deep.deep_tools.network import *
+from deep_tools.tools import *
+from deep_tools.network import *
 
 import os
 import torch
@@ -19,21 +19,20 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 def get_config():
     config = {
         "gamma": 6,
-        "optimizer": {"type": optim.SGD, "epoch_lr_decrease": 30,
-                      "optim_params": {"lr": 0.0001, "weight_decay": 5e-4, "momentum": 0.9}},
-
+        #"optimizer": {"type": optim.SGD, "epoch_lr_decrease": 30, "optim_params": {"lr": 0.0001, "weight_decay": 5e-4, "momentum": 0.9}},
+        "optimizer": {"type": optim.RMSprop, "epoch_lr_decrease": 30, "optim_params": {"lr": 1e-5, "weight_decay": 10 ** -5}, "lr_type": "step"},
         "info": "[BiHalf Unsupervised]",
         "resize_size": 256,
         "crop_size": 224,
         "batch_size": 64,
         "net": BiHalfModelUnsupervised,
         "dataset": "cifar10-1",  # in paper BiHalf is "Cifar-10(I)"
-        "epoch": 1,
-        "test_map": 1,
+        "epoch": 100,
+        "test_map": 5,
         "save_path": "save/BiHalf",
         # "device":torch.device("cpu"),
         "device": torch.device("cuda:0"),
-        "bit_list": [8],
+        "bit_list": [64],
     }
     config = config_dataset(config)
 
