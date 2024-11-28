@@ -1,0 +1,12 @@
+absl-py
+future
+grpcio
+Markdown
+numpy
+Pillow
+protobuf
+six
+tb-nightly
+torch
+torchvision
+Werkzeug

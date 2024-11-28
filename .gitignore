@@ -1,9 +1,10 @@
-/models/metrics-framework/sim_matrix
-/models/feature-extraction/imagenet-vgg16.pth
+/saved_models
+/data
+/features
+
 *.egg-info
 __pycache__
 venv
 
-features/*
-cifar-10-batches-py/
 .idea
+lsh
