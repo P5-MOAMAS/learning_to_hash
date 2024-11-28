@@ -8,14 +8,11 @@ from torchvision import datasets
 from torchvision.transforms import ToTensor
 
 class FeatureLoader:
-    def __init__(self, dataset_name: str, split_data: bool = True):
+    def __init__(self, dataset_name: str):
         super().__init__()
 
-        self.training = None
-        self.test = None
-        self.validation = None
-
-        self.split_data = split_data
+        self.labels = None
+        self.data = None
 
         self.dataset_name = dataset_name
         match dataset_name:
@@ -29,7 +26,7 @@ class FeatureLoader:
         self.load_feature_set()
 
 
-    def load_features(self, batch_size: int) -> List:
+    def load_features(self, batch_size: int = 1) -> List:
         image_features = []
 
         for i in range(1, batch_size + 1):
@@ -63,23 +60,21 @@ class FeatureLoader:
         for labels in mnist.targets.numpy():
             image_labels.append(labels)
 
-        image_features = self.load_features(6)
+        image_features = self.load_features()
         del mnist
         return image_features, image_labels
 
 
     def __init_cifar__(self):
         # Get all features from all images in CIFAR
-        image_features = self.load_features(5)
-        image_labels = []
+        image_features = self.load_features()
 
         # Get all labels in CIFAR
-        fp = "cifar-10-batches-py/"
-        file_names = [fp + f"data_batch_{i}" for i in range(1, 6)]
+        cifar = datasets.CIFAR10(root="data", train=True, download=True)
 
-        for name in file_names:
-            labels = unpickle(name)[b'labels']
-            image_labels += labels
+        image_labels = []
+        for labels in cifar.targets:
+            image_labels.append(labels)
 
         return image_features, image_labels
 
@@ -90,20 +85,8 @@ class FeatureLoader:
         if len(image_features) != len(image_labels):
             raise Exception("Not as many labels as there are images, feature size:", len(image_features), "label size:", len(image_labels))
 
-        # Create index for features and labels
-        idx_feature_label = [(id, feature, label) for id, (feature, label) in
-                             enumerate(zip(image_features, image_labels))]
-
-        if self.split_data:
-            # Splitting dataset into 70% training, 15% testing, and 15% validation
-            training_len = round(len(idx_feature_label) * 0.7)
-            valid_test_len = (len(idx_feature_label) - training_len) // 2
-
-            self.training = idx_feature_label[:training_len]
-            self.test = idx_feature_label[training_len:training_len + valid_test_len]
-            self.validation = idx_feature_label[training_len + valid_test_len:]
-        else:
-            self.training = self.test = self.validation = idx_feature_label
+        self.labels = image_labels
+        self.data = image_features
 
 
 def unpickle(file):
@@ -113,11 +96,9 @@ def unpickle(file):
 
 
 if __name__ == '__main__':
-    fl = FeatureLoader("mnist")
-    if fl.training == None or fl.validation == None or fl.test == None:
-        raise Exception("One of the sets were null")
+    fl = FeatureLoader("cifar-10")
+    if fl.data is None:
+        raise Exception("Loaded data is null")
 
-    print("Training:", len(fl.training), sep=" ")
-    print("Validation:", len(fl.validation), sep=" ")
-    print("Test:", len(fl.test), sep=" ")
+    print("Training:", len(fl.data))
 
