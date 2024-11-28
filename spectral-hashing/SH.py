@@ -93,7 +93,7 @@ class SpectralHashing:
 
         return torch.from_numpy(np.sign(U))
 
-    def query_image(self, features):
+    def query(self, features):
         """
         Convert a query image to a binary tensor using the trained SH model.
 
