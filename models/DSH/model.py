@@ -126,8 +126,8 @@ class LiuDSH(nn.Module):
 
         self.eval()
         with torch.no_grad():
-            embedding=self.forward(image.unsqueeze(0))
-            binary_hash = torch.round(embedding.clamp(-1,1)*0.5+0.5).cpu().int()
+            embedding = self.forward(image.unsqueeze(0).to("cuda"))
+            binary_hash = torch.round(embedding.clamp(-1,1) * 0.5 + 0.5).cpu().int()
             return binary_hash.float()
 
 if __name__ == '__main__':
