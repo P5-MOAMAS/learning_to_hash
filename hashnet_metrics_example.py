@@ -1,64 +1,46 @@
 import torch
-from models.deep.deep_tools.tools import cifar_dataset
-from models.deep.deep_tools.network import AlexNet
-from metrics.calc_metrics import calculate_metrics
 from torchvision import transforms
+
+from utility.data_loader import Dataloader
+from utility.metrics_framework import MetricsFramework
+from models.deep.deep_tools.network import AlexNet
 
 """
 YOU SHOULD RUN THIS SCRIPT FROM THE ROOT DIRECTORY OF THE PROJECT
 MAKE SURE THAT YOU HAVE A MODEL SAVED
 IN ORDER TO CHANGE THE AMOUNT OF BITS THE MODEL USE, YOU WILL HAVE TO CHANGE THE MODEL BEFORE TRAINING OTHERWISE YOU WILL GET AN ERROR
 """
+k = 500
+query_size = 10000
 
-if __name__ == '__main__':
-    config = {
-            "resize_size": 256,
-            "crop_size": 224,
-            "batch_size": 48,
-            # "dataset": "cifar10",
-            "dataset": "cifar10-1",
-            # "dataset": "cifar10-2",
-            # "device":torch.device("cpu"),
-            "device": torch.device("cuda:0"),
-            "max_images": 16666, # 59000 is default amount of images
-        }
-        
-    # Initialize the AlexNet model with x bits
-    hashnet_alexnet_cifar10 = AlexNet(config["batch_size"]).to(config["device"])
+config = {
+        "resize_size": 256,
+        "crop_size": 224,
+        "batch_size": 16,
+        # "dataset": "cifar10",
+        "dataset": "cifar10-1",
+        # "dataset": "cifar10-2",
+        # "device":torch.device("cpu"),
+        "device": torch.device("cuda:0"),
+        "max_images": 16666, # 59000 is default amount of images
+    }
 
-    # Load the model from the saved state
-    hashnet_alexnet_cifar10.load_state_dict(torch.load("save\HashNet\cifar10-1_48bits_0.419\model.pt", map_location=config["device"]))
-    #hashnet_alexnet_cifar10.eval()
+# Initialize the AlexNet model with x bits
+hashnet_alexnet_cifar10 = AlexNet(config["batch_size"]).to(config["device"])
 
-    # Get the data loaders for the CIFAR-10 dataset
-    train_loader, test_loader, db_loader, _, _, _ = cifar_dataset(config)
+# Load the model from the saved state
+hashnet_alexnet_cifar10.load_state_dict(torch.load("./models/deep/model.pt", map_location=config["device"], weights_only=False))
+#hashnet_alexnet_cifar10.eval()
 
-    images = []
-    labels = []
-    num_loaded_images = 0
-    # Get the images
-    for batch in db_loader:
-        batch_images, batch_labels, _ = batch
-        
-        images.append(batch_images)
-        labels.append(batch_labels)
-        
-        num_loaded_images += batch_images.size(0)
-        if num_loaded_images >= config["max_images"]:
-            break
-        
-    # Concatenate the images and labels
-    images = torch.cat(images)
-    labels = torch.cat(labels)
+trans = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize(config["crop_size"]),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+])
 
-    # Get query image, db_loader is 59000 with cifar10-1
-    query_image = images[0].to(config["device"])
+fl = Dataloader("cifar-10")
 
-    # Find hash code for the query image, uses CUDA
-    hash_code = hashnet_alexnet_cifar10.query_with_cuda(query_image)
-    
-    # Print the hash code
-    print(hash_code)
-    
-    # Calculate the metrics
-    calculate_metrics(hashnet_alexnet_cifar10.query_with_cuda, images, True)
+# Calculate the metrics
+metrics_framework = MetricsFramework(hashnet_alexnet_cifar10.query_with_cuda, fl.data, fl.labels, query_size, trans=trans)
+mAP = metrics_framework.calculate_metrics(k)
+print("Results for k =", k, ":", mAP)
