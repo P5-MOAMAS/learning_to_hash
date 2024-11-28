@@ -35,7 +35,7 @@ class SpectralHashing:
 
         # Eigenfunction enumeration
         R = mx - mn
-        max_mode = np.ceil((self.nbits + 1) * R / R.max()).astype(np.int)
+        max_mode = np.ceil((self.nbits + 1) * R / R.max()).astype(np.int64)
         n_modes = max_mode.sum() - len(max_mode) + 1
         modes = np.ones([n_modes, self.nbits])
         m = 0
@@ -71,7 +71,7 @@ class SpectralHashing:
         modes = self.model_components["modes"]
 
         # PCA transform and preprocessing
-        data_pca = pca.transform(data.numpy()) - mn.reshape(1, -1)
+        data_pca = pca.transform(data) - mn.reshape(1, -1)
 
         omega0 = np.pi / R
         omegas = modes * omega0.reshape(1, -1)
@@ -94,4 +94,4 @@ class SpectralHashing:
         Returns:
             torch.Tensor: Binary hash code for the query image.
         """
-        return self.generate_code(features)
+        return self.generate_code(torch.as_tensor(features).unsqueeze(0))
