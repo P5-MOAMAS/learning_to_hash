@@ -9,6 +9,7 @@ import numpy as np
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
+# Code gotten from https://github.com/swuxyj/DeepHash-pytorch
 # HashNet(ICCV2017)
 # paper [HashNet: Deep Learning to Hash by Continuation](http://openaccess.thecvf.com/content_ICCV_2017/papers/Cao_HashNet_Deep_Learning_ICCV_2017_paper.pdf)
 # code [HashNet caffe and pytorch](https://github.com/thuml/HashNet)

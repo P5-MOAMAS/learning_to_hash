@@ -11,7 +11,7 @@ from torchvision.models import VGG16_Weights as VGG16_Weights
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-
+# Code gotten from https://github.com/swuxyj/DeepHash-pytorch
 # Deep Unsupervised Image Hashing by Maximizing Bit Entropy(AAAI2021)
 # paper [Deep Unsupervised Image Hashing by Maximizing Bit Entropy](https://arxiv.org/pdf/2012.12334.pdf)
 # code [Deep-Unsupervised-Image-Hashing](https://github.com/liyunqianggyn/Deep-Unsupervised-Image-Hashing)
