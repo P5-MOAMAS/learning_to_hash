@@ -1,19 +1,17 @@
 import numpy as np
 
-from metrics.feature_loader import FeatureLoader
-from metrics.metrics_framework import MetricsFramework
+from utility.feature_loader import FeatureLoader
+from utility.metrics_framework import MetricsFramework
 from models.lsh import Lsh
 
 # Load the features from the CIFAR-10 dataset
-fl = FeatureLoader("cifar-10", False)
-data = fl.training
+fl = FeatureLoader("cifar-10")
 
-# Flatten the images for compatibility with LSH (each image as a 1D feature vector)
-features = [feature for (_, feature, _) in data]
-features = np.array(features)
+k = 500
+query_size = 10000
+features = np.asarray(fl.data[query_size:])
 
-k = 9000
-encode_len = [2, 4, 8, 16, 32, 64]
+encode_len = [8, 16, 32, 64]
 results = []
 for i in range(len(encode_len)):
     # Set LSH parameters
@@ -29,10 +27,10 @@ for i in range(len(encode_len)):
         pca_components=pca_components,
     )
 
-    metrics_framework = MetricsFramework(image_lsh.query, data, 2000)
+    metrics_framework = MetricsFramework(image_lsh.query, fl.data, fl.labels, query_size)
     mAP = metrics_framework.calculate_metrics(k)
     results.append(mAP)
 
 print("---------------- Result using k value of", k, "----------------")
 for i in range(len(results)):
-    print(encode_len[i], "bit length result:", round(results[i], 3))
+    print(encode_len[i], "bit length result:", results[i])
