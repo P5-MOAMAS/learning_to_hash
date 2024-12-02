@@ -1,7 +1,8 @@
 from collections.abc import Callable
-from typing import List
+from typing import List, Tuple, Any
 
 import numpy as np
+from matplotlib import pyplot as plt
 from torchvision.transforms import Compose
 from tqdm import tqdm, trange
 
@@ -83,22 +84,79 @@ class MetricsFramework:
         return codes
 
 
-    """
-    Returns the precision of a given query for a maximum of total_predictions
-    """
-    def precision(self, query: (int, List[int], int), total_predictions: int) -> float:
-        pass
+    def get_relevant_in_top_k(self, query_index: int, top_k: int) -> Tuple[int, np.ndarray, np.ndarray]:
+        # Calculate ground truth relevance by checking if the dot product between
+        # the query and retrieval labels is greater than zero (relevant items have a positive score)
+        ground_truth_relevance = (
+                    np.dot(self.queries.labels[query_index, :], self.database.labels.transpose()) > 0).astype(
+            np.float32)
+
+        hamming_distances = self.calculate_hamming_distance(self.queries.codes[query_index, :], self.database.codes)
+
+        # Sort the Hamming distances to rank retrieval items (ascending order: closer items first)
+        sorted_indices = np.argsort(hamming_distances)
+
+        # Reorder the ground truth relevance according to the sorted Hamming distances
+        sorted_ground_truth_relevance = ground_truth_relevance[sorted_indices]
+
+        # Select the top-k relevant ground truth items for this query
+        top_k_ground_truth_relevance = sorted_ground_truth_relevance[:top_k]
+
+        # Calculate the number of relevant items in the top-k
+        total_relevant_in_top_k = np.sum(top_k_ground_truth_relevance).astype(int)
+
+        return total_relevant_in_top_k, ground_truth_relevance, top_k_ground_truth_relevance
 
 
     """
-    Returns the recall of a given query for a maximum of total_predictions
+    Returns the precision of a given query for a maximum of top_k
     """
-    def recall(self, query: (int, List[int], int), total_predictions: int) -> float:
-        pass
+    def precision(self, query_index: int, top_k: int) -> float:
+        total_relevant_in_top_k, _, _ = self.get_relevant_in_top_k(query_index, top_k)
+        return total_relevant_in_top_k / top_k
 
 
-    def calculate_precision_recall(self):
-        pass
+    """
+    Returns the recall of a given query for a maximum of top_k
+    """
+    def recall(self, query_index: int, top_k: int) -> float:
+        total_relevant_in_top_k, ground_truth_relevance, _ = self.get_relevant_in_top_k(query_index, top_k)
+        return total_relevant_in_top_k / np.sum(ground_truth_relevance)
+
+
+    def create_precision_recall_curve(self, max_top_k: int):
+        precision_values = []
+        recall_values = []
+        num_queries = self.queries.labels.shape[0]
+
+        for query_index in trange(num_queries):
+            query_precision_values = []
+            query_recall_values = []
+
+            _, ground_truth_relevance, top_k_ground_truth_relevance = self.get_relevant_in_top_k(query_index, max_top_k)
+
+            for top_k in range(1, max_top_k + 1):
+                total_relevant_at_k = np.sum(top_k_ground_truth_relevance[:top_k]).astype(int)
+                precision_value = total_relevant_at_k / top_k
+                recall_value = total_relevant_at_k / np.sum(ground_truth_relevance)
+
+                query_precision_values.append(precision_value)
+                query_recall_values.append(recall_value)
+
+            precision_values.append(query_precision_values)
+            recall_values.append(query_recall_values)
+
+        avg_precision = np.mean(precision_values, axis=0)
+        avg_recall = np.mean(recall_values, axis=0)
+
+        plt.plot(avg_recall, avg_precision, marker='o')
+        plt.xlabel('Recall')
+        plt.ylabel('Precision')
+        plt.title('Precision-Recall Curve (Averaged over Queries)')
+        plt.grid(True)
+        plt.savefig("precision_recall_curve.png")
+
+        return avg_precision, avg_recall
 
 
     """
@@ -108,7 +166,6 @@ class MetricsFramework:
     def calculate_hamming_distance(hash_code_1, hash_code_2):
         # Get the number of bits in the binary codes
         num_bits = hash_code_2.shape[1]
-
         # Calculate the Hamming distance using the dot product
         # The expression np.dot(binary_code_1, binary_code_2.transpose()) calculates the number of matching bits
         # Subtracting this from the total number of bits gives the number of differing bits (Hamming distance)
@@ -120,29 +177,13 @@ class MetricsFramework:
     """
     This method is based on the implementation used in hashnet
     """
-    def calculate_top_k_mean_average_precision(self, top_k):
+    def calculate_top_k_mean_average_precision(self, top_k: int):
         num_queries = self.queries.labels.shape[0]
         total_mean_average_precision = 0
 
         print()
         for query_index in trange(num_queries, desc="Calculating mean average precision"):
-            # Calculate ground truth relevance by checking if the dot product between
-            # the query and retrieval labels is greater than zero (relevant items have a positive score)
-            ground_truth_relevance = (np.dot(self.queries.labels[query_index, :], self.database.labels.transpose()) > 0).astype(np.float32)
-
-            hamming_distances = self.calculate_hamming_distance(self.queries.codes[query_index, :], self.database.codes)
-
-            # Sort the Hamming distances to rank retrieval items (ascending order: closer items first)
-            sorted_indices = np.argsort(hamming_distances)
-
-            # Reorder the ground truth relevance according to the sorted Hamming distances
-            sorted_ground_truth_relevance = ground_truth_relevance[sorted_indices]
-
-            # Select the top-k relevant ground truth items for this query
-            top_k_ground_truth_relevance = sorted_ground_truth_relevance[:top_k]
-
-            # Calculate the number of relevant items in the top-k
-            total_relevant_in_top_k = np.sum(top_k_ground_truth_relevance).astype(int)
+            total_relevant_in_top_k, _, top_k_ground_truth_relevance = self.get_relevant_in_top_k(query_index, top_k)
 
             # If no relevant items in the top-k, skip this query
             if total_relevant_in_top_k == 0:
@@ -162,7 +203,13 @@ class MetricsFramework:
         return mean_average_precision
 
 
-    def calculate_metrics(self, total_predictions: int) -> float:
-        mAP = self.calculate_top_k_mean_average_precision(total_predictions)
+    def calculate_metrics(self, top_k: int) -> float:
+        if top_k > self.database.labels.shape[0]:
+            raise RuntimeError("Top k(", top_k,")is larger than the database(", self.database.labels.shape[0],")")
+
+        mAP = self.calculate_top_k_mean_average_precision(top_k)
+
+        self.create_precision_recall_curve(top_k)
+
         print("Mean Average Precision:", mAP)
         return mAP
