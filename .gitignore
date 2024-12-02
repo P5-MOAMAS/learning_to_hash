@@ -1,7 +1,6 @@
-/metrics/sim_matrix
 /saved_models
-/data/cifar-10-batches-py/
-/features/*
+/data
+/features
 
 *.egg-info
 __pycache__
