@@ -124,18 +124,23 @@ class MetricsFramework:
         return total_relevant_in_top_k / np.sum(ground_truth_relevance)
 
 
-    def create_precision_recall_curve(self, max_top_k: int):
+    def create_precision_recall_curve(self, max_top_k: int, min_k: int = 10):
+        if min_k < 1:
+            raise ValueError("min_k must be greater than or equal to 1")
+        if min_k > max_top_k:
+            raise ValueError("min_k must be less than or equal to max_top_k")
+
         precision_values = []
         recall_values = []
         num_queries = self.queries.labels.shape[0]
 
-        for query_index in trange(num_queries):
+        for query_index in trange(num_queries, desc="Calculating precision-recall curve"):
             query_precision_values = []
             query_recall_values = []
 
             _, ground_truth_relevance, top_k_ground_truth_relevance = self.get_relevant_in_top_k(query_index, max_top_k)
 
-            for top_k in range(1, max_top_k + 1):
+            for top_k in range(min_k, max_top_k + 1):
                 total_relevant_at_k = np.sum(top_k_ground_truth_relevance[:top_k]).astype(int)
                 precision_value = total_relevant_at_k / top_k
                 recall_value = total_relevant_at_k / np.sum(ground_truth_relevance)
@@ -152,7 +157,7 @@ class MetricsFramework:
         plt.plot(avg_recall, avg_precision, marker='o')
         plt.xlabel('Recall')
         plt.ylabel('Precision')
-        plt.title('Precision-Recall Curve (Averaged over Queries)')
+        plt.title('Precision-Recall Curve k: ' + str(min_k) + "-" + str(max_top_k) + " queries: " + str(num_queries))
         plt.grid(True)
         plt.savefig("precision_recall_curve.png")
 
