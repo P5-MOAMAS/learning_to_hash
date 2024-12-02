@@ -7,7 +7,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import time
 import numpy as np
-from torchvision.models import VGG16_Weights as VGG16_Weights
+from torchvision.models import AlexNet_Weights as AlexNet_Weights
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
@@ -44,9 +44,9 @@ def get_config():
 class BiHalfModelUnsupervised(nn.Module):
     def __init__(self, bit):
         super(BiHalfModelUnsupervised, self).__init__()
-        self.vgg = models.vgg16(weights=VGG16_Weights.IMAGENET1K_V1)
-        self.vgg.classifier = nn.Sequential(*list(self.vgg.classifier.children())[:6])
-        for param in self.vgg.parameters():
+        self.alexnet = models.alexnet(weights=AlexNet_Weights.IMAGENET1K_V1)
+        self.alexnet.classifier = nn.Sequential(*list(self.alexnet.classifier.children())[:6])
+        for param in self.alexnet.parameters():
             param.requires_grad = False
 
         self.fc_encode = nn.Linear(4096, bit)
@@ -70,9 +70,9 @@ class BiHalfModelUnsupervised(nn.Module):
             return grad
 
     def forward(self, x):
-        x = self.vgg.features(x)
+        x = self.alexnet.features(x)
         x = x.view(x.size(0), -1)
-        x = self.vgg.classifier(x)
+        x = self.alexnet.classifier(x)
 
         h = self.fc_encode(x)
         if not self.training:
