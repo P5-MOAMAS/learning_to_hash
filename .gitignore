@@ -8,3 +8,4 @@ venv
 
 .idea
 lsh
+models/deep/data
