@@ -1,17 +1,17 @@
 import numpy as np
 
+from models.lsh import Lsh
 from utility.feature_loader import FeatureLoader
 from utility.metrics_framework import MetricsFramework
-from models.lsh import Lsh
 
 # Load the features from the CIFAR-10 dataset
 fl = FeatureLoader("cifar-10")
 
 k = 500
-query_size = 10000
+query_size = 1000
 features = np.asarray(fl.data[query_size:])
 
-encode_len = [8, 16, 32, 64]
+encode_len = [8]
 results = []
 for i in range(len(encode_len)):
     # Set LSH parameters
@@ -27,7 +27,7 @@ for i in range(len(encode_len)):
         pca_components=pca_components,
     )
 
-    metrics_framework = MetricsFramework(image_lsh.query, fl.data, fl.labels, query_size)
+    metrics_framework = MetricsFramework(image_lsh.query, fl, query_size)
     mAP = metrics_framework.calculate_metrics(k)
     results.append(mAP)
 

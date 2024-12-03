@@ -1,9 +1,9 @@
 # Import Spectral Hashing
-from utility.metrics_framework import MetricsFramework
+import numpy as np
+
 from models.spectral_hashing import SH as SpectralHash
 from utility.feature_loader import FeatureLoader
-
-import numpy as np
+from utility.metrics_framework import MetricsFramework
 
 # Load the features from the CIFAR-10 dataset
 fl = FeatureLoader("cifar-10")
@@ -19,7 +19,7 @@ for i in range(len(encode_len)):
     spectral_hash = SpectralHash.SpectralHashing(encode_len[i])
     spectral_hash.fit(features)
 
-    metrics_framework = MetricsFramework(spectral_hash.query, fl.data, fl.labels, query_size)
+    metrics_framework = MetricsFramework(spectral_hash.query, fl, query_size)
     mAP = metrics_framework.calculate_metrics(k)
     results.append(mAP)
 
