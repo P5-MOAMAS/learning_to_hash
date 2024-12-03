@@ -7,6 +7,8 @@ import torch
 from torchvision import datasets
 from torchvision.transforms import ToTensor
 
+from utility.nuswide_loader import NuswideMLoader
+
 
 class FeatureLoader:
     def __init__(self, dataset_name: str):
@@ -21,6 +23,8 @@ class FeatureLoader:
                 self.load_func = self.__init_cifar__
             case "mnist":
                 self.load_func = self.__init_mnist__
+            case "nuswide":
+                self.load_func = self.__init_nuswide__
             case _:
                 print("Unrecognized feature set!")
                 sys.exit(1)
@@ -52,6 +56,10 @@ class FeatureLoader:
 
             image_features += data
         return image_features
+
+    def __init_nuswide__(self):
+        nuswide = NuswideMLoader()
+        return self.load_features(), np.asarray(nuswide.labels)
 
     def __init_mnist__(self):
         mnist = datasets.FashionMNIST(
