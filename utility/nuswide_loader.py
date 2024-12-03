@@ -13,7 +13,6 @@ class NuswideMLoader:
         data = []
         labels = []
         image_list = open(path).readlines()
-        print("Path: " + path + ", length: " + str(len(image_list)))
         for val in image_list:
             path = self.data_root + val.split()[0]
             # Labels are everything after the first "word"
@@ -37,9 +36,8 @@ class NuswideMLoader:
 
     def __getitem__(self, index):
         path = self.data[index]
-        target = self.labels[index]
         img = Image.open(path).convert('RGB')
-        return img, target
+        return img
 
     def __len__(self):
         return len(self.data)
