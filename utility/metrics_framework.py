@@ -1,10 +1,13 @@
 from collections.abc import Callable
-from typing import List, Tuple, Any
+from typing import Tuple
 
 import numpy as np
 from matplotlib import pyplot as plt
 from torchvision.transforms import Compose
 from tqdm import tqdm, trange
+
+from utility.data_loader import Dataloader
+from utility.feature_loader import FeatureLoader
 
 
 class Database:
@@ -14,55 +17,71 @@ class Database:
 
 
 class MetricsFramework:
-    def __init__(self, query_func: Callable, data: List[List[int]], labels: List[int], query_size: int, trans: Compose = None, multi_encoder: bool = False):
+    def __init__(self, query_func: Callable, data: Dataloader | FeatureLoader, query_size: int, trans: Compose = None,
+                 multi_encoder: bool = False):
         self.query_func = query_func
 
         self.transform = trans
-        self.database = self.create_database(data[query_size:], labels[query_size:], multi_encoder)
-        self.queries = self.create_database(data[:query_size], labels[:query_size], multi_encoder)
-
+        self.database = self.create_database(data, query_size, False, multi_encoder)
+        self.queries = self.create_database(data, query_size, True, multi_encoder)
 
     """
     Creates a database in format of the class Database, using the data given.
     Supports query functions that can encode multiple at once.
     """
-    def create_database(self, data: List[List[int]], labels: List[int], use_multi: bool = False) -> Database:
-        if not data or not labels:
-            raise RuntimeError("Dataset or labels are empty.")
-        if len(data) != len(labels):
-            raise ValueError(f"Mismatch between dataset size ", len(data), "and label size",len(labels))
 
-        print("Creating database of", str(len(data)), "images...")
+    def create_database(self, data: Dataloader | FeatureLoader, query_size: int, is_queries: bool,
+                        use_multi: bool = False) -> Database:
+        if not data:
+            raise RuntimeError("Dataset is empty.")
+        if len(data.data) != len(data.labels):
+            raise ValueError(f"Mismatch between dataset size ", len(data.data), "and label size", len(data.labels))
+
         if use_multi:
-            codes = self.encode_multi(data)
+            codes = self.encode_multi(data, query_size, is_queries)
         else:
-            codes = self.encode_single(data)
+            codes = self.encode_single(data, query_size, is_queries)
 
-        # Assuming labels range from 0 to 9, might have to altered for nus dataset
-        labels_one_hot = np.zeros((len(labels), 10))
-        for i in trange(len(labels), desc="Creating one-hot encoded labels and normalizing hash-codes"):
+        # Create one hot label if label isn't already one-hot
+        labels = data.labels[:query_size] if is_queries else data.labels[query_size:]
+        if isinstance(data.labels[0], np.ndarray) | isinstance(data.labels[0], list):
+            labels_one_hot = labels
+        else:
+            labels_one_hot = self.create_one_hot_labels(labels)
+
+        for i in trange(len(codes)):
             # Update the code and handle any -1 values
             code = np.asarray(codes[i]).flatten()
             code[code == -1] = 0
             codes[i] = code
 
+        return Database(np.asarray(codes), labels_one_hot)
+
+    @staticmethod
+    def create_one_hot_labels(labels):
+        labels_one_hot = np.zeros((len(labels), 10))
+        for i in trange(len(labels), desc="Creating one-hot encoded labels"):
             # Set the corresponding label in the one-hot encoded vector
             labels_one_hot[i, labels[i]] = 1
-
-        return Database(np.asarray(codes), labels_one_hot)
+        return labels_one_hot
 
     """
     Uses the query function to encode images into hash-codes in batches of 10000
     """
-    def encode_multi(self, data: List[List[int]]):
+
+    def encode_multi(self, data: Dataloader | FeatureLoader, query_size: int, is_queries: bool):
         batch_size = 10000
         codes = []
 
         # Process images in batches of 10000 as to not run out of memory
         print("Multi encoding is used, processing images in batches of", batch_size)
-        for i in tqdm(range(0, len(data), batch_size), desc="Encoding images"):
-            batch = data[i:i + batch_size]
+        data_range = range(0, query_size, batch_size) if is_queries else range(query_size, len(data), batch_size)
+        for i in tqdm(data_range, desc="Encoding images"):
+            batch_end = i + batch_size
+            if batch_end >= len(data):
+                batch_end = len(data)
 
+            batch = [data[index] for index in range(i, batch_end)]
             if self.transform is not None:
                 batch = [self.transform(feature) for feature in batch]
 
@@ -71,24 +90,25 @@ class MetricsFramework:
 
         return codes
 
-
     """
     Uses the query function to encode images one at a time
     """
-    def encode_single(self, data: List[List[int]]):
+
+    def encode_single(self, data: Dataloader | FeatureLoader, query_size: int, is_queries: bool):
         codes = []
-        for feature in tqdm(data, desc="Encoding images"):
+        data_range = range(0, query_size) if is_queries else range(query_size, len(data))
+        for i in tqdm(data_range, desc="Encoding images"):
+            feature = data[i]
             if self.transform is not None:
                 feature = self.transform(feature)
             codes.append(self.query_func(feature))
         return codes
 
-
     def get_relevant_in_top_k(self, query_index: int, top_k: int) -> Tuple[int, np.ndarray, np.ndarray]:
         # Calculate ground truth relevance by checking if the dot product between
         # the query and retrieval labels is greater than zero (relevant items have a positive score)
         ground_truth_relevance = (
-                    np.dot(self.queries.labels[query_index, :], self.database.labels.transpose()) > 0).astype(
+                np.dot(self.queries.labels[query_index, :], self.database.labels.transpose()) > 0).astype(
             np.float32)
 
         hamming_distances = self.calculate_hamming_distance(self.queries.codes[query_index, :], self.database.codes)
@@ -107,24 +127,23 @@ class MetricsFramework:
 
         return total_relevant_in_top_k, ground_truth_relevance, top_k_ground_truth_relevance
 
-
     """
     Returns the precision of a given query for a maximum of top_k
     """
+
     def precision(self, query_index: int, top_k: int) -> float:
         total_relevant_in_top_k, _, _ = self.get_relevant_in_top_k(query_index, top_k)
         return total_relevant_in_top_k / top_k
 
-
     """
     Returns the recall of a given query for a maximum of top_k
     """
+
     def recall(self, query_index: int, top_k: int) -> float:
         total_relevant_in_top_k, ground_truth_relevance, _ = self.get_relevant_in_top_k(query_index, top_k)
         return total_relevant_in_top_k / np.sum(ground_truth_relevance)
 
-
-    def create_precision_recall_curve(self, max_top_k: int, min_k: int = 10):
+    def create_precision_recall_curve(self, max_top_k: int, min_k: int = 1):
         if min_k < 1:
             raise ValueError("min_k must be greater than or equal to 1")
         if min_k > max_top_k:
@@ -163,10 +182,10 @@ class MetricsFramework:
 
         return avg_precision, avg_recall
 
-
     """
     Calculates the hamming distance between 2 hash-codes
     """
+
     @staticmethod
     def calculate_hamming_distance(hash_code_1, hash_code_2):
         # Get the number of bits in the binary codes
@@ -178,10 +197,10 @@ class MetricsFramework:
 
         return hamming_distances
 
-
     """
     This method is based on the implementation used in hashnet
     """
+
     def calculate_top_k_mean_average_precision(self, top_k: int):
         num_queries = self.queries.labels.shape[0]
         total_mean_average_precision = 0
@@ -207,14 +226,13 @@ class MetricsFramework:
 
         return mean_average_precision
 
-
     def calculate_metrics(self, top_k: int) -> float:
         if top_k > self.database.labels.shape[0]:
-            raise RuntimeError("Top k(", top_k,")is larger than the database(", self.database.labels.shape[0],")")
+            raise RuntimeError("Top k(", top_k, ")is larger than the database(", self.database.labels.shape[0], ")")
 
         mAP = self.calculate_top_k_mean_average_precision(top_k)
 
-        self.create_precision_recall_curve(top_k)
+        # self.create_precision_recall_curve(top_k)
 
         print("Mean Average Precision:", mAP)
         return mAP
