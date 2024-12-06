@@ -78,6 +78,7 @@ class Encoder:
         print("Total time elapsed: " + elapsed_time)
 
     def save_to_file(self, codes: List[tensor], dataset_batch: int):
+        os.makedirs("features", exist_ok=True)
         file = "features/" + str(self.dataset_name) + "-" + str(dataset_batch) + "-features"
         print("Saving features to " + file)
         torch.save(codes, file)
@@ -86,7 +87,6 @@ class Encoder:
     def encode(self):
         data = load_data_set(self.dataset_name)
         self.start_time = time.time()
-        os.makedirs("features", exist_ok=True)
 
         batch_size = 1000
         codes = []
@@ -118,7 +118,7 @@ def load_data_set(dataset_name: str) -> NuswideMLoader | List[Any]:
         case "cifar-10":
             data = datasets.CIFAR10(root="data", train=True, download=True).data
         case "mnist":
-            data = datasets.FashionMNIST(root="data", train=True, download=True, transform=ToTensor()).data.numpy()
+            data = datasets.MNIST(root="data", train=True, download=True, transform=ToTensor()).data.numpy()
         case "nuswide":
             return NuswideMLoader()
         case _:
