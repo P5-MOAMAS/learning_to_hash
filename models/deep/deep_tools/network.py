@@ -1,20 +1,20 @@
+import torch
 import torch.nn as nn
 from torchvision import models
-from tqdm import tqdm
-import torch
 from torchvision.models import AlexNet_Weights as AlexNet_Weights
 from torchvision.models import ResNet50_Weights as ResNet_Weights
 
-class AlexNet(nn.Module):
-    def __init__(self, hash_bit):
-        super(AlexNet, self).__init__()
 
+class AlexNet(nn.Module):
+    def __init__(self, hash_bit, is_mnist: bool = False):
+        super(AlexNet, self).__init__()
+        self.is_mnist = is_mnist
         model_alexnet = models.alexnet(weights=AlexNet_Weights.IMAGENET1K_V1)
         self.features = model_alexnet.features
-        
-        # Fix for MNIST specifically
-        #self.features[0] = nn.Conv2d(1, 64, kernel_size=11, stride=4, padding=2)
-        
+
+        if is_mnist:
+            self.features[0] = nn.Conv2d(1, 64, kernel_size=11, stride=4, padding=2)
+
         cl1 = nn.Linear(256 * 6 * 6, 4096)
         cl1.weight = model_alexnet.classifier[1].weight
         cl1.bias = model_alexnet.classifier[1].bias
@@ -38,15 +38,20 @@ class AlexNet(nn.Module):
         x = x.view(x.size(0), 256 * 6 * 6)
         x = self.hash_layer(x)
         return x
-    
-    def query_with_cuda(self, image):
+
+    def query_with_cuda_multi(self, images: torch.Tensor):
+        if images.shape[0] == 1:
+            images = images.squeeze(0)
         self.eval()
         with torch.no_grad():  # Disable gradient calculation for inference
-            image = image.to(torch.device("cuda:0"))  # Move the image to the specified device
-            output = self(image.unsqueeze(0))  # Add batch dimension and pass through the network
+            images = images.to(torch.device("cuda:0"))  # Move the image to the specified device
+            output = self(images)  # Pass through the network
             binary_hash_code = output.data.cpu().sign()  # Convert to binary hash code
         return binary_hash_code
-    
+
+    def query_with_cuda(self, image: torch.Tensor):
+        return self.query_with_cuda_multi(image.unsqueeze(0))
+
     def query_with_cpu(self, image):
         self.eval()
         with torch.no_grad():  # Disable gradient calculation for inference
@@ -54,7 +59,6 @@ class AlexNet(nn.Module):
             output = self(image.unsqueeze(0))  # Add batch dimension and pass through the network
             binary_hash_code = output.data.cpu().sign()  # Convert to binary hash code
         return binary_hash_code
-
 
 
 resnet_dict = {"ResNet18": models.resnet18, "ResNet34": models.resnet34, "ResNet50": models.resnet50,
@@ -86,7 +90,7 @@ class ResNet(nn.Module):
         x = x.view(x.size(0), -1)
         y = self.hash_layer(x)
         return y
-    
+
     def query_with_cuda(self, image):
         self.eval()
         with torch.no_grad():  # Disable gradient calculation for inference
@@ -94,7 +98,7 @@ class ResNet(nn.Module):
             output = self(image.unsqueeze(0))  # Add batch dimension and pass through the network
             binary_hash_code = output.data.cpu().sign()  # Convert to binary hash code
         return binary_hash_code
-    
+
     def query_with_cpu(self, image):
         self.eval()
         with torch.no_grad():  # Disable gradient calculation for inference
