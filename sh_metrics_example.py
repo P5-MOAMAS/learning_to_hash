@@ -5,24 +5,23 @@ from models.spectral_hashing import SH as SpectralHash
 from utility.feature_loader import FeatureLoader
 from utility.metrics_framework import MetricsFramework
 
-# Load the features from the CIFAR-10 dataset
-fl = FeatureLoader("cifar-10")
-
-k = 500
+################################################################
+############################ Config ############################
+################################################################
+k = [100, 250, 500, 1000, 2500, 5000]
 query_size = 10000
-features = np.asarray(fl.data[query_size:])
-
 encode_len = [8, 16, 32, 64]
-results = []
-for i in range(len(encode_len)):
-    # Initialize Spectral Hashing with the features data
-    spectral_hash = SpectralHash.SpectralHashing(encode_len[i])
-    spectral_hash.fit(features)
+dataset_names = ["mnist", "cifar-10", "nuswide"]
 
-    metrics_framework = MetricsFramework(spectral_hash.query, fl, query_size)
-    mAP = metrics_framework.calculate_metrics(k)
-    results.append(mAP)
+for dataset_name in dataset_names:
+    fl = FeatureLoader(dataset_name)
+    features = np.asarray(fl.data[query_size:])
 
-print("---------------- Result using k value of", k, "----------------")
-for i in range(len(results)):
-    print(encode_len[i], "bit length result:", results[i])
+    results = []
+    for i in range(len(encode_len)):
+        # Initialize Spectral Hashing with the features data
+        spectral_hash = SpectralHash.SpectralHashing(encode_len[i])
+        spectral_hash.fit(features)
+
+        metrics_framework = MetricsFramework(spectral_hash.query, fl, query_size)
+        metrics_framework.calculate_metrics(dataset_name + "/SH_" + str(encode_len[i]) + "_bits_" + dataset_name, k)
