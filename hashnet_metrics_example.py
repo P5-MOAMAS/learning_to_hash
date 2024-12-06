@@ -5,44 +5,35 @@ from models.deep.deep_tools.network import AlexNet
 from utility.data_loader import Dataloader
 from utility.metrics_framework import MetricsFramework
 
-"""
-YOU SHOULD RUN THIS SCRIPT FROM THE ROOT DIRECTORY OF THE PROJECT
-MAKE SURE THAT YOU HAVE A MODEL SAVED
-IN ORDER TO CHANGE THE AMOUNT OF BITS THE MODEL USE, YOU WILL HAVE TO CHANGE THE MODEL BEFORE TRAINING OTHERWISE YOU WILL GET AN ERROR
-"""
-k = 5000
-query_size = 1000
-
-config = {
-    "resize_size": 256,
-    "crop_size": 224,
-    "batch_size": 16,
-    # "dataset": "cifar10",
-    "dataset": "cifar10-1",
-    # "dataset": "cifar10-2",
-    # "device":torch.device("cpu"),
-    "device": torch.device("cuda:0"),
-    "max_images": 16666,  # 59000 is default amount of images
-}
+################################################################
+############################ Config ############################
+################################################################
+k = [100, 250, 500, 1000, 2500, 5000]
+query_size = 10000
+encode_length = 8
+dataset_name = "nuswide"
+model_path = "saved_models/HashNet-NUSWIDE81/hashnet_8bits_0.642/model.pt"
+is_mnist = False
 
 # Initialize the AlexNet model with x bits
-hashnet_alexnet_cifar10 = AlexNet(config["batch_size"]).to(config["device"])
+hash_net = AlexNet(encode_length, is_mnist).to(torch.device("cuda:0"))
 
 # Load the model from the saved state
-hashnet_alexnet_cifar10.load_state_dict(
-    torch.load("./models/deep/model.pt", map_location=config["device"], weights_only=False))
-# hashnet_alexnet_cifar10.eval()
+hash_net.load_state_dict(torch.load(model_path, map_location=torch.device("cuda:0"), weights_only=False))
+hash_net.eval()
 
-trans = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Resize(config["resize_size"]),
-    transforms.CenterCrop(config["crop_size"]),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-])
+if is_mnist:
+    trans = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.Normalize([0.5], [0.5])
+    ])
+else:
+    trans = transforms.Compose([])
 
-fl = Dataloader("cifar-10")
+fl = Dataloader(dataset_name, True)
 
 # Calculate the metrics
-metrics_framework = MetricsFramework(hashnet_alexnet_cifar10.query_with_cuda, fl, query_size, trans=trans)
-mAP = metrics_framework.calculate_metrics(k)
-print("Results for k =", k, ":", mAP)
+metrics_framework = MetricsFramework(hash_net.query_with_cuda_multi, fl, query_size, trans=trans, multi_encoder=True)
+mAP = metrics_framework.calculate_metrics(dataset_name + "/hashnet_" + str(encode_length) + "_bits_" + dataset_name, k)
