@@ -1,4 +1,3 @@
-import pickle
 import sys
 from typing import List
 
@@ -62,7 +61,7 @@ class FeatureLoader:
         return self.load_features(), np.asarray(nuswide.labels)
 
     def __init_mnist__(self):
-        mnist = datasets.FashionMNIST(
+        mnist = datasets.MNIST(
             root="data",
             train=True,
             download=True,
@@ -99,12 +98,6 @@ class FeatureLoader:
 
         self.labels = image_labels
         self.data = image_features
-
-
-def unpickle(file):
-    with open(file, 'rb') as fo:
-        d = pickle.load(fo, encoding='bytes')
-    return d
 
 
 if __name__ == '__main__':
