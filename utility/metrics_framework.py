@@ -1,8 +1,11 @@
+import json
+import os
 from collections.abc import Callable
-from typing import Tuple
+from concurrent.futures import ThreadPoolExecutor
+from typing import Tuple, List
 
 import numpy as np
-from matplotlib import pyplot as plt
+import torch
 from torchvision.transforms import Compose
 from tqdm import tqdm, trange
 
@@ -37,25 +40,34 @@ class MetricsFramework:
         if len(data.data) != len(data.labels):
             raise ValueError(f"Mismatch between dataset size ", len(data.data), "and label size", len(data.labels))
 
+        # Hashcode generation
         if use_multi:
             codes = self.encode_multi(data, query_size, is_queries)
         else:
             codes = self.encode_single(data, query_size, is_queries)
 
-        # Create one hot label if label isn't already one-hot
-        labels = data.labels[:query_size] if is_queries else data.labels[query_size:]
-        if isinstance(data.labels[0], np.ndarray) | isinstance(data.labels[0], list):
-            labels_one_hot = labels
-        else:
-            labels_one_hot = self.create_one_hot_labels(labels)
-
+        # Ensure the generated codes are using {0, 1} and isn't a 2d array
         for i in trange(len(codes)):
             # Update the code and handle any -1 values
             code = np.asarray(codes[i]).flatten()
             code[code == -1] = 0
             codes[i] = code
 
+        # Label generation
+        # Split the data into the correct chunk
+        labels = data.labels[:query_size] if is_queries else data.labels[query_size:]
+
+        # Create one hot label if label isn't already one-hot (Nuswide is already one hot)
+        if isinstance(data.labels[0], np.ndarray) | isinstance(data.labels[0], list):
+            labels_one_hot = np.asarray(labels)
+        else:
+            labels_one_hot = self.create_one_hot_labels(labels)
+
         return Database(np.asarray(codes), labels_one_hot)
+
+    """
+    Creates one-hot version of the given labels. This is specifically done for Cifar-10 and Mnist.
+    """
 
     @staticmethod
     def create_one_hot_labels(labels):
@@ -66,24 +78,26 @@ class MetricsFramework:
         return labels_one_hot
 
     """
-    Uses the query function to encode images into hash-codes in batches of 10000
+    Uses the query function to encode images into hash-codes in batches of 1500
     """
 
     def encode_multi(self, data: Dataloader | FeatureLoader, query_size: int, is_queries: bool):
-        batch_size = 10000
+        batch_size = 1500
         codes = []
 
-        # Process images in batches of 10000 as to not run out of memory
+        # Process images in batches of 1500 as to not run out of memory
         print("Multi encoding is used, processing images in batches of", batch_size)
         data_range = range(0, query_size, batch_size) if is_queries else range(query_size, len(data), batch_size)
         for i in tqdm(data_range, desc="Encoding images"):
-            batch_end = i + batch_size
-            if batch_end >= len(data):
-                batch_end = len(data)
+            batch_last_index = i + batch_size
+            if batch_last_index >= len(data):
+                batch_last_index = len(data)
 
-            batch = [data[index] for index in range(i, batch_end)]
+            # Create the batch and transform it if a transform is given
+            batch = [data[index] for index in range(i, batch_last_index)]
             if self.transform is not None:
                 batch = [self.transform(feature) for feature in batch]
+                batch = torch.stack(batch)
 
             batch_codes = self.query_func(batch)
             codes.extend(batch_codes)
@@ -104,7 +118,11 @@ class MetricsFramework:
             codes.append(self.query_func(feature))
         return codes
 
-    def get_relevant_in_top_k(self, query_index: int, top_k: int) -> Tuple[int, np.ndarray, np.ndarray]:
+    """
+    Finds all relevant items in the top k and ranks them by hamming distance
+    """
+
+    def get_relevant_in_top_k(self, query_index: int, top_k: int) -> Tuple[np.ndarray, np.ndarray]:
         # Calculate ground truth relevance by checking if the dot product between
         # the query and retrieval labels is greater than zero (relevant items have a positive score)
         ground_truth_relevance = (
@@ -113,7 +131,7 @@ class MetricsFramework:
 
         hamming_distances = self.calculate_hamming_distance(self.queries.codes[query_index, :], self.database.codes)
 
-        # Sort the Hamming distances to rank retrieval items (ascending order: closer items first)
+        # Sort the indices based on hamming distance in ascending order
         sorted_indices = np.argsort(hamming_distances)
 
         # Reorder the ground truth relevance according to the sorted Hamming distances
@@ -122,65 +140,51 @@ class MetricsFramework:
         # Select the top-k relevant ground truth items for this query
         top_k_ground_truth_relevance = sorted_ground_truth_relevance[:top_k]
 
-        # Calculate the number of relevant items in the top-k
-        total_relevant_in_top_k = np.sum(top_k_ground_truth_relevance).astype(int)
+        return ground_truth_relevance, top_k_ground_truth_relevance
 
-        return total_relevant_in_top_k, ground_truth_relevance, top_k_ground_truth_relevance
-
-    """
-    Returns the precision of a given query for a maximum of top_k
-    """
-
-    def precision(self, query_index: int, top_k: int) -> float:
-        total_relevant_in_top_k, _, _ = self.get_relevant_in_top_k(query_index, top_k)
-        return total_relevant_in_top_k / top_k
-
-    """
-    Returns the recall of a given query for a maximum of top_k
-    """
-
-    def recall(self, query_index: int, top_k: int) -> float:
-        total_relevant_in_top_k, ground_truth_relevance, _ = self.get_relevant_in_top_k(query_index, top_k)
-        return total_relevant_in_top_k / np.sum(ground_truth_relevance)
-
-    def create_precision_recall_curve(self, max_top_k: int, min_k: int = 1):
+    def create_precision_recall_curve(self, name: str, max_top_k: int, min_k: int = 100, max_queries: int = 10000):
         if min_k < 1:
             raise ValueError("min_k must be greater than or equal to 1")
         if min_k > max_top_k:
             raise ValueError("min_k must be less than or equal to max_top_k")
 
+        # The function used to calculate the precision recall curve for each query
+        def compute_precision_recall(query_index):
+            # Compute the relevant objects op to the max k value
+            ground_truth_relevance, top_k_ground_truth_relevance = self.get_relevant_in_top_k(query_index, max_top_k)
+
+            # Compute precision for all k values op to the max k value
+            relevant_at_k = np.cumsum(top_k_ground_truth_relevance)
+            computed_precision_values = relevant_at_k / np.arange(1, max_top_k + 1)
+
+            # Compute recall for all k values op to the max k value
+            total_relevant = np.sum(ground_truth_relevance)
+            computed_recall_values = relevant_at_k / total_relevant
+
+            # Return precision and recall in the range min k to top k
+            return computed_precision_values[min_k - 1:max_top_k], computed_recall_values[min_k - 1:max_top_k]
+
         precision_values = []
         recall_values = []
         num_queries = self.queries.labels.shape[0]
+        if num_queries > max_queries:
+            num_queries = max_queries
 
-        for query_index in trange(num_queries, desc="Calculating precision-recall curve"):
-            query_precision_values = []
-            query_recall_values = []
+        # Use ThreadPoolExecutor for parallel processing
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            results = list(tqdm(executor.map(compute_precision_recall, range(num_queries)), total=num_queries,
+                                desc="Calculating precision-recall"))
 
-            _, ground_truth_relevance, top_k_ground_truth_relevance = self.get_relevant_in_top_k(query_index, max_top_k)
-
-            for top_k in range(min_k, max_top_k + 1):
-                total_relevant_at_k = np.sum(top_k_ground_truth_relevance[:top_k]).astype(int)
-                precision_value = total_relevant_at_k / top_k
-                recall_value = total_relevant_at_k / np.sum(ground_truth_relevance)
-
-                query_precision_values.append(precision_value)
-                query_recall_values.append(recall_value)
-
+        # Collect results from the threads
+        for query_precision_values, query_recall_values in results:
             precision_values.append(query_precision_values)
             recall_values.append(query_recall_values)
 
+        # Calculate the average over all queries for each k value
         avg_precision = np.mean(precision_values, axis=0)
         avg_recall = np.mean(recall_values, axis=0)
 
-        plt.plot(avg_recall, avg_precision, marker='o')
-        plt.xlabel('Recall')
-        plt.ylabel('Precision')
-        plt.title('Precision-Recall Curve k: ' + str(min_k) + "-" + str(max_top_k) + " queries: " + str(num_queries))
-        plt.grid(True)
-        plt.savefig("precision_recall_curve.png")
-
-        return avg_precision, avg_recall
+        return avg_precision.tolist(), avg_recall.tolist()
 
     """
     Calculates the hamming distance between 2 hash-codes
@@ -201,38 +205,54 @@ class MetricsFramework:
     This method is based on the implementation used in hashnet
     """
 
-    def calculate_top_k_mean_average_precision(self, top_k: int):
-        num_queries = self.queries.labels.shape[0]
-        total_mean_average_precision = 0
-
-        print()
+    def calculate_top_k_mean_average_precision(self, top_k: List[int]):
+        num_queries = self.queries.codes.shape[0]
+        average_precision = [0 for _ in range(len(top_k))]
+        highest_k = max(top_k)
         for query_index in trange(num_queries, desc="Calculating mean average precision"):
-            total_relevant_in_top_k, _, top_k_ground_truth_relevance = self.get_relevant_in_top_k(query_index, top_k)
+            # Find the relevant items op to highest k value
+            _, top_k_ground_truth_relevance = self.get_relevant_in_top_k(query_index, highest_k)
 
-            # If no relevant items in the top-k, skip this query
-            if total_relevant_in_top_k == 0:
-                continue
+            # Calculate the average precision for each k value
+            for k_index in range(len(top_k)):
+                # Get the relevance of items op to the current k value
+                top_k_ground_truth_relevance_at_k = top_k_ground_truth_relevance[:top_k[k_index]]
+                total_relevant_in_top_k_at_k = np.sum(top_k_ground_truth_relevance[:top_k[k_index]]).astype(int)
 
-            # Create a linear sequence from 1 to the number of relevant items in top-k (used for weighting)
-            relevance_count = np.linspace(1, total_relevant_in_top_k, total_relevant_in_top_k)
+                # Create a linear sequence from 1 to the number of relevant items in top-k. Essentially: [1, 2, ..., total_relevant_in_top_k_at_k]
+                relevance_count = np.linspace(1, total_relevant_in_top_k_at_k, total_relevant_in_top_k_at_k)
 
-            # Get the indices of relevant items in the top-k
-            relevant_item_indices = np.asarray(np.where(top_k_ground_truth_relevance == 1)) + 1.0
+                # Get the indices of relevant items in the top-k
+                relevant_item_indices = np.asarray(np.where(top_k_ground_truth_relevance_at_k == 1)) + 1.0
 
-            # Calculate the Average Precision for this query by averaging the relevance weighted by rank
-            total_mean_average_precision += np.mean(relevance_count / relevant_item_indices)
+                # Calculate the Average Precision for this query by averaging the relevance weighted by rank
+                average_precision[k_index] += np.mean(relevance_count / relevant_item_indices)
 
-        mean_average_precision = total_mean_average_precision / num_queries
+        # Calculate the mean average precision at each k and return them as an array
+        mean_average_precision = [average_precision[i] / num_queries for i in range(len(top_k))]
 
         return mean_average_precision
 
-    def calculate_metrics(self, top_k: int) -> float:
-        if top_k > self.database.labels.shape[0]:
-            raise RuntimeError("Top k(", top_k, ")is larger than the database(", self.database.labels.shape[0], ")")
+    def calculate_metrics(self, name: str, top_k: List[int]) -> dict[
+        int | str, float | np.floating | np.complexfloating]:
+        metrics = {}
 
-        mAP = self.calculate_top_k_mean_average_precision(top_k)
+        # Calculate the mAP at each k value
+        map_at_ks = self.calculate_top_k_mean_average_precision(top_k)
+        for k in range(len(top_k)):
+            metrics[k] = map_at_ks[k]
+            print("Mean Average Precision at " + str(k) + ":", metrics[k])
 
-        # self.create_precision_recall_curve(top_k)
+        # Calculate the precision recall curve
+        avg_precision, avg_recall = self.create_precision_recall_curve(name, len(self.database.codes), max_queries=2500)
+        metrics["precision"] = avg_precision
+        metrics["recall"] = avg_recall
 
-        print("Mean Average Precision:", mAP)
-        return mAP
+        # Save the results to a json file for future use
+        os.makedirs("results", exist_ok=True)
+        results_file = "results/" + name + "_metrics.json"
+        print("Saving results to " + results_file)
+        with open(results_file, 'w') as f:
+            json.dump(metrics, f)
+
+        return metrics
