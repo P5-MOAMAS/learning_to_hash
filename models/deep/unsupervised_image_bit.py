@@ -41,10 +41,14 @@ def get_config():
 
 
 class BiHalfModelUnsupervised(nn.Module):
-    def __init__(self, bit):
+    def __init__(self, bit, is_mnist: bool):
         super(BiHalfModelUnsupervised, self).__init__()
         self.alexnet = models.alexnet(weights=AlexNet_Weights.IMAGENET1K_V1)
         self.alexnet.classifier = nn.Sequential(*list(self.alexnet.classifier.children())[:6])
+
+        if is_mnist:
+            self.alexnet.features[0] = nn.Conv2d(1, 64, kernel_size=11, stride=4, padding=2)
+
         for param in self.alexnet.parameters():
             param.requires_grad = False
 
