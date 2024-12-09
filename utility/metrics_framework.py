@@ -87,11 +87,13 @@ class MetricsFramework:
 
         # Process images in batches of 1500 as to not run out of memory
         print("Multi encoding is used, processing images in batches of", batch_size)
-        data_range = range(0, query_size, batch_size) if is_queries else range(query_size, len(data), batch_size)
+
+        last_index, first_index = (query_size, 0) if is_queries else (len(data), query_size)
+        data_range = range(first_index, last_index, batch_size)
+
         for i in tqdm(data_range, desc="Encoding images"):
-            batch_last_index = i + batch_size
-            if batch_last_index >= len(data):
-                batch_last_index = len(data)
+            # Ensure the current batch is within the expected range
+            batch_last_index = min(i + batch_size, last_index)
 
             # Create the batch and transform it if a transform is given
             batch = [data[index] for index in range(i, batch_last_index)]
@@ -142,7 +144,7 @@ class MetricsFramework:
 
         return ground_truth_relevance, top_k_ground_truth_relevance
 
-    def create_precision_recall_curve(self, name: str, max_top_k: int, min_k: int = 100, max_queries: int = 10000):
+    def create_precision_recall_curve(self, max_top_k: int, min_k: int = 100, max_queries: int = 10000):
         if min_k < 1:
             raise ValueError("min_k must be greater than or equal to 1")
         if min_k > max_top_k:
@@ -219,11 +221,17 @@ class MetricsFramework:
                 top_k_ground_truth_relevance_at_k = top_k_ground_truth_relevance[:top_k[k_index]]
                 total_relevant_in_top_k_at_k = np.sum(top_k_ground_truth_relevance[:top_k[k_index]]).astype(int)
 
+                if total_relevant_in_top_k_at_k == 0:
+                    continue
+
                 # Create a linear sequence from 1 to the number of relevant items in top-k. Essentially: [1, 2, ..., total_relevant_in_top_k_at_k]
                 relevance_count = np.linspace(1, total_relevant_in_top_k_at_k, total_relevant_in_top_k_at_k)
 
                 # Get the indices of relevant items in the top-k
                 relevant_item_indices = np.asarray(np.where(top_k_ground_truth_relevance_at_k == 1)) + 1.0
+
+                if len(relevant_item_indices) == 0:
+                    continue
 
                 # Calculate the Average Precision for this query by averaging the relevance weighted by rank
                 average_precision[k_index] += np.mean(relevance_count / relevant_item_indices)
@@ -240,11 +248,11 @@ class MetricsFramework:
         # Calculate the mAP at each k value
         map_at_ks = self.calculate_top_k_mean_average_precision(top_k)
         for k in range(len(top_k)):
-            metrics[k] = map_at_ks[k]
-            print("Mean Average Precision at " + str(k) + ":", metrics[k])
+            metrics[top_k[k]] = map_at_ks[k]
+            print("Mean Average Precision at " + str(top_k[k]) + ":", metrics[top_k[k]])
 
         # Calculate the precision recall curve
-        avg_precision, avg_recall = self.create_precision_recall_curve(name, len(self.database.codes), max_queries=2500)
+        avg_precision, avg_recall = self.create_precision_recall_curve(len(self.database.codes), max_queries=2500)
         metrics["precision"] = avg_precision
         metrics["recall"] = avg_recall
 
