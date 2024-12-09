@@ -40,11 +40,4 @@ class NuswideMLoader:
         return img
 
     def __len__(self):
-        return len(self.data)
-
-
-if __name__ == '__main__':
-    loader = NuswideMLoader()
-
-    print(len(loader.data), len(loader.labels))
-    print(loader.data[0])
+        return len(self.labels)
