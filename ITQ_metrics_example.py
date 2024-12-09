@@ -1,25 +1,22 @@
-from utility.feature_loader import FeatureLoader
-
-from utility.metrics_framework import MetricsFramework
 from models.ITQ.hashing.itq_model import *
+from utility.feature_loader import FeatureLoader
+from utility.metrics_framework import MetricsFramework
 
-# Load the features from the CIFAR-10 dataset
-fl = FeatureLoader("cifar-10")
-
-k = 500
+################################################################
+############################ Config ############################
+################################################################
+k = [100, 250, 500, 1000, 2500, 5000]
 query_size = 10000
-
 encode_len = [8, 16, 32, 64]
-results = []
-for i in range(len(encode_len)):
-    print("---------------- Calculating metrics for bit length", encode_len[i], "----------------")
-    model = ITQ(encode_len[i])
-    model.fit(fl.data[query_size:])
+dataset_names = ["mnist", "cifar-10", "nuswide"]
 
-    metrics_framework = MetricsFramework(model.encode, fl.data, fl.labels, query_size, multi_encoder=True)
-    mAP = metrics_framework.calculate_metrics(k)
-    results.append(mAP)
+for dataset_name in dataset_names:
+    fl = FeatureLoader(dataset_name)
 
-print("---------------- Result using k value of", k, "----------------")
-for i in range(len(results)):
-    print(encode_len[i], "bit length result:", results[i])
+    for i in range(len(encode_len)):
+        print("---------------- Calculating metrics for bit length", encode_len[i], "----------------")
+        model = ITQ(encode_len[i])
+        model.fit(fl.data[query_size:])
+
+        metrics_framework = MetricsFramework(model.encode, fl, query_size, multi_encoder=True)
+        metrics_framework.calculate_metrics(dataset_name + "/ITQ_" + str(encode_len[i]) + "_bits_" + dataset_name, k)

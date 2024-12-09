@@ -1,16 +1,19 @@
 import argparse
 import os
-import time
 import sys
-from typing import List
+import time
+from typing import List, Any
 
+import torch
+import torch.nn as nn
+from torchvision import datasets
 from torchvision import models, transforms
 from torchvision.models import AlexNet_Weights
-import torch.nn as nn
-import torch
-from triton.language import tensor
-from torchvision import datasets
 from torchvision.transforms import ToTensor, functional
+from tqdm import tqdm
+from triton.language import tensor
+
+from nuswide_loader import NuswideMLoader
 
 
 class AlexNet(nn.Module):
@@ -37,13 +40,11 @@ class AlexNet(nn.Module):
             nn.Linear(4096, feature_size),
         )
 
-
     def forward(self, x):
         x = self.features(x)
         x = x.view(x.size(0), 256 * 6 * 6)
         x = self.feature_layer(x)
         return x
-
 
     def query(self, image):
         self.eval()
@@ -59,16 +60,15 @@ class Encoder:
         self.alex_net = AlexNet(512)
         self.start_time = 0
 
-
     @staticmethod
     def transform_image(image):
         trans = transforms.Compose([
-            transforms.Resize(224),
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
         return trans(image).unsqueeze(0)
-
 
     def print_elapsed_time(self):
         minutes, seconds = divmod(time.time() - self.start_time, 60)
@@ -77,43 +77,50 @@ class Encoder:
 
         print("Total time elapsed: " + elapsed_time)
 
-
     def save_to_file(self, codes: List[tensor], dataset_batch: int):
+        os.makedirs("features", exist_ok=True)
         file = "features/" + str(self.dataset_name) + "-" + str(dataset_batch) + "-features"
         print("Saving features to " + file)
         torch.save(codes, file)
         print("Features successfully saved!\n")
 
-
     def encode(self):
         data = load_data_set(self.dataset_name)
         self.start_time = time.time()
-        os.makedirs("features", exist_ok=True)
 
+        batch_size = 1000
         codes = []
-        for index, image in enumerate(data, start=1):
-            image = self.transform_image(image)
-            code = self.alex_net(image)
+        t = tqdm(range(0, len(data)), desc="Encoding images")
+        for i in range(0, len(data), batch_size):
+            batch_end = i + batch_size
+            if batch_end >= len(data):
+                batch_end = len(data)
+
+            batch = []
+            for index in range(i, batch_end):
+                batch.append(self.transform_image(data[index]))
+                t.update(1)
+
+            code = self.alex_net(torch.stack(batch).squeeze(1))
             # Detach ensures the code doesn't linger in memory
-            code = code.detach().flatten()
-            codes.append(code)
-            print("Encoding image", index, "of", len(data), flush=True, end="\r")
-            del code, image
-
-        print()
-
+            code = code.detach()
+            codes.extend(code)
+            del code
+        t.close()
         self.print_elapsed_time()
         self.save_to_file(codes, 1)
 
         del codes
 
 
-def load_data_set(dataset_name: str) -> List:
+def load_data_set(dataset_name: str) -> NuswideMLoader | List[Any]:
     match dataset_name:
         case "cifar-10":
             data = datasets.CIFAR10(root="data", train=True, download=True).data
         case "mnist":
-            data = datasets.FashionMNIST( root="data", train=True, download=True, transform=ToTensor()).data.numpy()
+            data = datasets.MNIST(root="data", train=True, download=True, transform=ToTensor()).data.numpy()
+        case "nuswide":
+            return NuswideMLoader()
         case _:
             print("Unrecognized data set!")
             sys.exit(1)
@@ -127,7 +134,8 @@ def load_data_set(dataset_name: str) -> List:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Based Image Encoder')
-    parser.add_argument("-d", "--dataset", type=str, help="dataset to use (cifar-10), sets: cifar-10, mnist, image-net", default="cifar-10")
+    parser.add_argument("-d", "--dataset", type=str, help="dataset to use (cifar-10), sets: cifar-10, mnist, image-net",
+                        default="cifar-10")
     args = parser.parse_args()
 
     if not torch.cuda.is_available():

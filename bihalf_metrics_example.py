@@ -1,63 +1,52 @@
 import torch
-from models.deep.deep_tools.tools import cifar_dataset
-from models.deep.unsupervised_image_bit import BiHalfModelUnsupervised
-from metrics.calc_metrics import calculate_metrics
 from torchvision import transforms
 
-"""
-YOU SHOULD RUN THIS SCRIPT FROM THE ROOT DIRECTORY OF THE PROJECT
-MAKE SURE THAT YOU HAVE A MODEL SAVED
-IN ORDER TO CHANGE THE AMOUNT OF BITS THE MODEL USE, YOU WILL HAVE TO CHANGE THE MODEL BEFORE TRAINING OTHERWISE YOU WILL GET AN ERROR
-"""
+from models.deep.unsupervised_image_bit import BiHalfModelUnsupervised
+from utility.data_loader import Dataloader
+from utility.metrics_framework import MetricsFramework
 
-if __name__ == '__main__':
-    config = {
-            "resize_size": 256,
-            "crop_size": 224,
-            "batch_size": 8,
-            # "dataset": "cifar10",
-            "dataset": "cifar10-1",
-            # "dataset": "cifar10-2",
-            # "device":torch.device("cpu"),
-            "device": torch.device("cuda:0"),
-            "max_images": 16666, # 59000 is default amount of images
-        }
-        
+################################################################
+############################ Config ############################
+################################################################
+k = [100, 250, 500, 1000, 2500, 5000]
+query_size = 10000
+dataset_name = "mnist"
+device = torch.device("cuda:0")
+is_mnist = True
+
+saved_models = [
+    (8, "saved_models/BiHalf-MNIST/BiHalf_8bits_0.211/model.pt"),
+    (16, "saved_models/BiHalf-MNIST/BiHalf_16bits_0.248/model.pt"),
+    (32, "saved_models/BiHalf-MNIST/BiHalf_32bits_0.333/model.pt"),
+    (64, "saved_models/BiHalf-MNIST/BiHalf_64bits_0.343/model.pt")
+]
+
+if is_mnist:
+    trans = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.Normalize([0.5], [0.5])
+    ])
+else:
+    trans = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+
+fl = Dataloader(dataset_name)
+
+for encode_length, model_path in saved_models:
+    print(f"\nCalculating metrics for Bihalf at {encode_length} bits")
     # Initialize the AlexNet model with x bits
-    bihalf_cifar10 = BiHalfModelUnsupervised(config["batch_size"]).to(config["device"])
+    bihalf = BiHalfModelUnsupervised(encode_length, is_mnist).to(device)
 
     # Load the model from the saved state
-    bihalf_cifar10.load_state_dict(torch.load("save\BiHalf\cifar10-1_8bits_0.363\model.pt", map_location=config["device"]))
+    bihalf.load_state_dict(torch.load(model_path, map_location=device, weights_only=False))
 
-    # Get the data loaders for the CIFAR-10 dataset
-    train_loader, test_loader, db_loader, _, _, _ = cifar_dataset(config)
-
-    images = []
-    labels = []
-    num_loaded_images = 0
-    # Get the images
-    for batch in db_loader:
-        batch_images, batch_labels, _ = batch
-        
-        images.append(batch_images)
-        labels.append(batch_labels)
-        
-        num_loaded_images += batch_images.size(0)
-        if num_loaded_images >= config["max_images"]:
-            break
-        
-    # Concatenate the images and labels
-    images = torch.cat(images)
-    labels = torch.cat(labels)
-
-    # Get query image, db_loader is 59000 with cifar10-1
-    query_image = images[0].to(config["device"])
-
-    # Find hash code for the query image, uses CUDA
-    hash_code = bihalf_cifar10.query_with_cuda(query_image)
-    
-    # Print the hash code
-    print(hash_code)
-    
     # Calculate the metrics
-    calculate_metrics(bihalf_cifar10.query_with_cuda, images, True)
+    metrics_framework = MetricsFramework(bihalf.query_with_cuda_multi, fl, query_size, trans=trans, multi_encoder=True)
+    mAP = metrics_framework.calculate_metrics(dataset_name + "/bihalf_" + str(encode_length) + "_bits_" + dataset_name,
+                                              k)

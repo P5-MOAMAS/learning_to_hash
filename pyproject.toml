@@ -7,9 +7,9 @@ build-backend = "setuptools.build_meta"
 py-modules = []
 
 [project]
-name = "labelextractor"
+name = "learning-to-hash"
 dynamic = ["version"]
-description = "Label extraction"
+description = "Learning to hash"
 
 dependencies = [
     "numpy",
@@ -17,5 +17,7 @@ dependencies = [
     "torch",
     "Pillow",
     "torchvision",
-    "argparse"
+    "argparse",
+    "tqdm",
+    "matplotlib"
 ]

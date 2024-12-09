@@ -1,15 +1,13 @@
-from deep_tools.tools import *
-from deep_tools.network import *
-
-import os
-import torch
-import torch.optim as optim
-import torch.nn.functional as F
 import time
-import numpy as np
-from torchvision.models import AlexNet_Weights as AlexNet_Weights
+
+import torch.nn.functional as F
+import torch.optim as optim
+
+from models.deep.deep_tools.network import *
+from models.deep.deep_tools.tools import *
 
 torch.multiprocessing.set_sharing_strategy('file_system')
+
 
 # Code gotten from https://github.com/swuxyj/DeepHash-pytorch
 # Deep Unsupervised Image Hashing by Maximizing Bit Entropy(AAAI2021)
@@ -19,8 +17,9 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 def get_config():
     config = {
         "gamma": 6,
-        #"optimizer": {"type": optim.SGD, "epoch_lr_decrease": 30, "optim_params": {"lr": 0.0001, "weight_decay": 5e-4, "momentum": 0.9}},
-        "optimizer": {"type": optim.RMSprop, "epoch_lr_decrease": 30, "optim_params": {"lr": 1e-5, "weight_decay": 10 ** -5}, "lr_type": "step"},
+        # "optimizer": {"type": optim.SGD, "epoch_lr_decrease": 30, "optim_params": {"lr": 0.0001, "weight_decay": 5e-4, "momentum": 0.9}},
+        "optimizer": {"type": optim.RMSprop, "epoch_lr_decrease": 30,
+                      "optim_params": {"lr": 1e-5, "weight_decay": 10 ** -5}, "lr_type": "step"},
         "info": "[BiHalf Unsupervised]",
         "resize_size": 256,
         "crop_size": 224,
@@ -42,10 +41,14 @@ def get_config():
 
 
 class BiHalfModelUnsupervised(nn.Module):
-    def __init__(self, bit):
+    def __init__(self, bit, is_mnist: bool):
         super(BiHalfModelUnsupervised, self).__init__()
         self.alexnet = models.alexnet(weights=AlexNet_Weights.IMAGENET1K_V1)
         self.alexnet.classifier = nn.Sequential(*list(self.alexnet.classifier.children())[:6])
+
+        if is_mnist:
+            self.alexnet.features[0] = nn.Conv2d(1, 64, kernel_size=11, stride=4, padding=2)
+
         for param in self.alexnet.parameters():
             param.requires_grad = False
 
@@ -83,15 +86,18 @@ class BiHalfModelUnsupervised(nn.Module):
             target_x = F.cosine_similarity(x[:x.size(0) // 2], x[x.size(0) // 2:])
             loss = F.mse_loss(target_b, target_x)
             return loss
-        
-    def query_with_cuda(self, image):
+
+    def query_with_cuda_multi(self, images):
         self.eval()
         with torch.no_grad():  # Disable gradient calculation for inference
-            image = image.to(torch.device("cuda:0"))  # Move the image to the specified device
-            output = self(image.unsqueeze(0))  # Add batch dimension and pass through the network
+            images = images.to(torch.device("cuda:0"))  # Move the image to the specified device
+            output = self(images)  # Add batch dimension and pass through the network
             binary_hash_code = output.data.cpu().sign()  # Convert to binary hash code
         return binary_hash_code
-    
+
+    def query_with_cuda(self, image):
+        return self.query_with_cuda_multi(image.unsqueeze(0))
+
     def query_with_cpu(self, image):
         self.eval()
         with torch.no_grad():  # Disable gradient calculation for inference

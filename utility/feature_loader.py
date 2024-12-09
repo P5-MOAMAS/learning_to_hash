@@ -1,11 +1,13 @@
-import pickle
 import sys
 from typing import List
 
-import torch
 import numpy as np
+import torch
 from torchvision import datasets
 from torchvision.transforms import ToTensor
+
+from utility.nuswide_loader import NuswideMLoader
+
 
 class FeatureLoader:
     def __init__(self, dataset_name: str):
@@ -20,11 +22,18 @@ class FeatureLoader:
                 self.load_func = self.__init_cifar__
             case "mnist":
                 self.load_func = self.__init_mnist__
+            case "nuswide":
+                self.load_func = self.__init_nuswide__
             case _:
                 print("Unrecognized feature set!")
                 sys.exit(1)
         self.load_feature_set()
 
+    def __getitem__(self, index):
+        return self.data[index]
+
+    def __len__(self):
+        return len(self.data)
 
     def load_features(self, batch_size: int = 1) -> List:
         image_features = []
@@ -47,9 +56,12 @@ class FeatureLoader:
             image_features += data
         return image_features
 
+    def __init_nuswide__(self):
+        nuswide = NuswideMLoader()
+        return self.load_features(), np.asarray(nuswide.labels)
 
     def __init_mnist__(self):
-        mnist = datasets.FashionMNIST(
+        mnist = datasets.MNIST(
             root="data",
             train=True,
             download=True,
@@ -64,7 +76,6 @@ class FeatureLoader:
         del mnist
         return image_features, image_labels
 
-
     def __init_cifar__(self):
         # Get all features from all images in CIFAR
         image_features = self.load_features()
@@ -78,21 +89,15 @@ class FeatureLoader:
 
         return image_features, image_labels
 
-
     def load_feature_set(self):
         image_features, image_labels = self.load_func()
         # Check if the length of features matches the length of labels
         if len(image_features) != len(image_labels):
-            raise Exception("Not as many labels as there are images, feature size:", len(image_features), "label size:", len(image_labels))
+            raise Exception("Not as many labels as there are images, feature size:", len(image_features), "label size:",
+                            len(image_labels))
 
         self.labels = image_labels
         self.data = image_features
-
-
-def unpickle(file):
-    with open(file, 'rb') as fo:
-        d = pickle.load(fo, encoding='bytes')
-    return d
 
 
 if __name__ == '__main__':
@@ -101,4 +106,3 @@ if __name__ == '__main__':
         raise Exception("Loaded data is null")
 
     print("Training:", len(fl.data))
-
