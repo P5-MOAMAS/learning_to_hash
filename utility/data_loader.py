@@ -32,14 +32,13 @@ class Dataloader:
     def __len__(self):
         return len(self.data)
 
-    @staticmethod
-    def __init_nuswide__():
+    def __init_nuswide__(self):
         loader = NuswideMLoader()
         return loader, loader.labels
 
     @staticmethod
     def __init_mnist__():
-        mnist = datasets.FashionMNIST(
+        mnist = datasets.MNIST(
             root="data",
             train=True,
             download=True,
@@ -52,7 +51,7 @@ class Dataloader:
 
         image_data = []
         for image in mnist.data.numpy():
-            image_data.append(functional.to_pil_image(image).convert("RGB"))
+            image_data.append(functional.to_pil_image(image))
 
         return image_data, image_labels
 
