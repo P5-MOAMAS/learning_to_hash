@@ -106,3 +106,40 @@ class ResNet(nn.Module):
             output = self(image.unsqueeze(0))  # Add batch dimension and pass through the network
             binary_hash_code = output.data.cpu().sign()  # Convert to binary hash code
         return binary_hash_code
+
+class ImprovedAlexNet(nn.Module):
+    def __init__(self, bit):
+        super(ImprovedAlexNet, self).__init__()
+
+        # Feature extractor with smaller convolution kernels and dropout for regularization
+        self.features = nn.Sequential(
+            nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+        )
+
+        # Fully connected layers with dropout
+        self.fc = nn.Sequential(
+            nn.Linear(256 * 4 * 4, 512),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(512, bit)
+        )
+
+        # Enable fine-tuning for feature extractor layers
+        for param in self.features.parameters():
+            param.requires_grad = True  # Allow fine-tuning on these layers
+
+    def forward(self, x):
+        x = self.features(x)  # Extract features
+        x = x.view(x.size(0), -1)  # Flatten the feature map
+        x = self.fc(x)  # Pass through fully connected layers
+        return x
