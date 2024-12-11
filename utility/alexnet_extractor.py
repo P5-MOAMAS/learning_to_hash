@@ -57,7 +57,7 @@ class AlexNet(nn.Module):
 class Encoder:
     def __init__(self, args):
         self.dataset_name = args.dataset
-        self.alex_net = AlexNet(512)
+        self.alex_net = AlexNet(512).to(torch.device("cuda:0"))
         self.start_time = 0
 
     @staticmethod
@@ -101,9 +101,9 @@ class Encoder:
                 batch.append(self.transform_image(data[index]))
                 t.update(1)
 
-            code = self.alex_net(torch.stack(batch).squeeze(1))
+            code = self.alex_net(torch.stack(batch).squeeze(1).to(torch.device("cuda:0")))
             # Detach ensures the code doesn't linger in memory
-            code = code.detach()
+            code = code.detach().cpu()
             codes.extend(code)
             del code
         t.close()
@@ -135,7 +135,7 @@ def load_data_set(dataset_name: str) -> NuswideMLoader | List[Any]:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Based Image Encoder')
     parser.add_argument("-d", "--dataset", type=str, help="dataset to use (cifar-10), sets: cifar-10, mnist, image-net",
-                        default="cifar-10")
+                        default="mnist")
     args = parser.parse_args()
 
     if not torch.cuda.is_available():
