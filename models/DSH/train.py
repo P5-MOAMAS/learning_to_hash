@@ -1,18 +1,20 @@
 """
 Liu et al., "Deep Supervised Hashing for Fast Image Retrieval"
 """
-import time
-from collections import defaultdict
 import random
+import time
+
 import torch
+import torchvision.transforms as transforms
 from torch import nn
 from torch import optim
-from torchvision.datasets import MNIST, ImageNet, CIFAR10
 from torch.utils.data import DataLoader, Dataset
-import torchvision.transforms as transforms
 from torch.utils.tensorboard import SummaryWriter
-from .model import LiuDSH
+from torchvision.datasets import MNIST, ImageNet, CIFAR10
 from tqdm import tqdm  # Add tqdm for progress bar
+
+from model import LiuDSH
+
 # hyper-parameters
 DATA_ROOT = 'data_out'
 LR_INIT = 3e-4
@@ -25,7 +27,8 @@ ALPHA = 0.01
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 torch.set_default_dtype(torch.float)
 
-def setup_data(dataset_name: str, data_root:str, train=True):
+
+def setup_data(dataset_name: str, data_root: str, train=True):
     """
        Configures a specified dataset with transformation.
        Supported datasets: MNIST, CIFAR-10, ImageNet.
@@ -46,13 +49,14 @@ def setup_data(dataset_name: str, data_root:str, train=True):
         size, channels, classes = 32, 3, 10
     elif dataset_name == 'imagenet':
         dataset = ImageNet(root=data_root, train=train,
-                           transform=transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor(),transforms.Normalize((0.485, 0.456, 0.406),(0.229, 0.224, 0.225))]),
+                           transform=transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor(), transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))]),
                            download=True)
         size, channels, classes = 256, 3, 1000
     else:
         raise ValueError(f'Unknown dataset {dataset_name}')
 
     return dataset, size, channels, classes
+
 
 class PairDataset(Dataset):
     """
@@ -64,6 +68,7 @@ class PairDataset(Dataset):
             x_target, y_target (torch.tensor): the first and second label in the pair
             target_equals (int): Binary indicator of similarity (0 if x_target == y_target, meaning the pair is similar, else 1 for dissimilar)
         """
+
     def __init__(self, data_root: str, dataset_name: str, train=True):
         super().__init__()
 
@@ -117,8 +122,9 @@ class Trainer:
         self.writer.close()
 
     def run_step(self, model, x_imgs, y_imgs, target_equals, train: bool):
-        x_out = model(x_imgs)
-        y_out = model(y_imgs)
+        x_out = model(x_imgs.to(device))
+        y_out = model(y_imgs.to(device))
+        target_equals = target_equals.to(device)
 
         squared_loss = torch.mean(self.mse_loss(x_out, y_out), dim=1)
         positive_pair_loss = (0.5 * (1 - target_equals) * squared_loss)
@@ -191,8 +197,8 @@ class Trainer:
             progress_bar.close()
 
             # Evaluate the model at the end of the epoch
-            #avg_loss = self.evaluate()
-            #print(f"Epoch {epoch + 1}/{self.total_epochs}, Validation Loss: {avg_loss:.4f}")
+            # avg_loss = self.evaluate()
+            # print(f"Epoch {epoch + 1}/{self.total_epochs}, Validation Loss: {avg_loss:.4f}")
 
             self.best_model_path = f'best_model_{dataset}_{code_size}.pth'
 
@@ -253,6 +259,7 @@ def train_model(dataset_name: str, code_size: int, epochs: int):
     # Save the trained model
     torch.save(model.state_dict(), f'{dataset_name}_hash_model.pth')
 
+
 def get_image_hash(model_path: str, image: torch.Tensor, dataset_name: str, code_size: int):
     dataset, size, channels, classes = setup_data(dataset_name, DATA_ROOT)
     model = LiuDSH(code_size=code_size, channels=channels, size=size, num_classes=classes).to(device)
@@ -260,9 +267,10 @@ def get_image_hash(model_path: str, image: torch.Tensor, dataset_name: str, code
     model.eval()
     return model.query_image(image)
 
+
 if __name__ == '__main__':
-    dataset = 'cifar' # Choose between mnist, cifar or imagenet
-    code_size = 16 # Choose e.g. (8, 16, 32, 64)
+    dataset = 'cifar'  # Choose between mnist, cifar or nuswide_81_m
+    code_size = 8  # Choose e.g. (8, 16, 32, 64)
     epochs = 50
     train_model(dataset_name=dataset, code_size=code_size, epochs=epochs)
 
@@ -272,9 +280,8 @@ if __name__ == '__main__':
     hash_code = get_image_hash('best_model.pth', test_image, dataset, code_size)
     print("Hash Code for the test image:", hash_code)
 
-    #For loading the model:
-    #model.load_state_dict(torch.load('hash_model.pth', weights_only=True))
-    #model.eval() #or train
-    #hash_code = model.query_image(sample_image)
-    #print("Hash Code:", hash_code)
-
+    # For loading the model:
+    # model.load_state_dict(torch.load('hash_model.pth', weights_only=True))
+    # model.eval() #or train
+    # hash_code = model.query_image(sample_image)
+    # print("Hash Code:", hash_code)
