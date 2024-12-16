@@ -1,13 +1,12 @@
-from deep_tools.tools import *
-from deep_tools.network import *
-
-import os
-import torch
-import torch.optim as optim
 import time
-import numpy as np
+
+import torch.optim as optim
+
+from deep_tools.network import *
+from deep_tools.tools import *
 
 torch.multiprocessing.set_sharing_strategy('file_system')
+
 
 # Code gotten from https://github.com/swuxyj/DeepHash-pytorch
 # HashNet(ICCV2017)
@@ -17,7 +16,6 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 def get_config():
     config = {
         "alpha": 0.1,
-        # "optimizer":{"type":  optim.SGD, "optim_params": {"lr": 0.001, "weight_decay": 10 ** -5}, "lr_type": "step"},
         "optimizer": {"type": optim.RMSprop, "optim_params": {"lr": 1e-5, "weight_decay": 10 ** -5}, "lr_type": "step"},
         "info": "[HashNet]",
         "step_continuation": 20,
@@ -25,23 +23,14 @@ def get_config():
         "crop_size": 224,
         "batch_size": 64,
         "net": AlexNet,
-        # "net":ResNet,
-        # "dataset": "cifar10",
-        #"dataset": "cifar10-1",
-        # "dataset": "cifar10-2",
-        # "dataset": "coco",
-        # "dataset": "mirflickr",
-        # "dataset": "voc2012",
-        # "dataset": "imagenet",
-        # "dataset": "nuswide_21",
-        # "dataset": "nuswide_21_m",
-         "dataset": "nuswide_81_m",
-        #"dataset": "mnist",
+        "dataset": "cifar10-1",
+        # "dataset": "nuswide_81_m",
+        # "dataset": "mnist",
         "epoch": 100,
         "test_map": 5,
         "save_path": "save/HashNet",
         # "device":torch.device("cpu"),
-         "device": torch.device("cuda:0"),
+        "device": torch.device("cuda:0"),
         "bit_list": [8],
     }
     config = config_dataset(config)
@@ -60,8 +49,8 @@ class HashNetLoss(torch.nn.Module):
         dot_product = sigmoid_alpha * u @ u.t()
         mask_positive = S > 0
         mask_negative = (1 - S).bool()
-        
-        neg_log_probe = dot_product + torch.log(1 + torch.exp(-dot_product)) -  S * dot_product
+
+        neg_log_probe = dot_product + torch.log(1 + torch.exp(-dot_product)) - S * dot_product
         S1 = torch.sum(mask_positive.float())
         S0 = torch.sum(mask_negative.float())
         S = S0 + S1
@@ -97,7 +86,6 @@ def train_val(config, bit):
 
         train_loss = 0
         for image, label, ind in train_loader:
-
             image = image.to(device)
             label = label.to(device)
 
