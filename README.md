@@ -20,7 +20,8 @@ Features should be extracted to "~/learning_to_hash/features".\
 
 Mnist-digits and Cifar-10 will automatically get downloaded as needed.\
 Nuswide-81-M should be extracted to "~/learning_to_hash/data" and can be downloaded using the following
-link: [Google Drive](https://drive.google.com/file/d/0B7IzDz-4yH_HMFdiSE44R1lselE/view?usp=sharing&resourcekey=0-w5zM4GH9liG3rtoZoWzXag)
+link: [Google Drive](https://drive.google.com/file/d/0B7IzDz-4yH_HMFdiSE44R1lselE/view?usp=sharing&resourcekey=0-w5zM4GH9liG3rtoZoWzXag),
+[original repository](https://github.com/thuml/HashNet/blob/master/pytorch/README.md)
 
 ### Installing required packages
 
