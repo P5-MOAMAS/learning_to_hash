@@ -1,4 +1,5 @@
-# learning_to_hash
+# Learning to hash
+A semester project by group cs-24-dat-5-01 at Aalborg University.
 
 ## Setup environment
 
