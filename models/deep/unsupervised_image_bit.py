@@ -25,13 +25,15 @@ def get_config():
         "crop_size": 224,
         "batch_size": 64,
         "net": BiHalfModelUnsupervised,
-        "dataset": "cifar10-1",  # in paper BiHalf is "Cifar-10(I)"
+        # "dataset": "mnist",
+        "dataset": "cifar10-1",
+        # "dataset": "nuswide_81_m",
         "epoch": 100,
         "test_map": 5,
         "save_path": "save/BiHalf",
         # "device":torch.device("cpu"),
         "device": torch.device("cuda:0"),
-        "bit_list": [64],
+        "bit_list": [8],
     }
     config = config_dataset(config)
 
