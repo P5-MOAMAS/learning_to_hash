@@ -54,7 +54,7 @@ pip install -e .
 
 ### Bihalf
 
-The default config for HashNet trains on Cifar-10 at 8-bits, this can be altered in "models/deep/unsupervised_image_bit.py".\
+The default config for Bihalf trains on Cifar-10 at 8-bits, this can be altered in "models/deep/unsupervised_image_bit.py".\
 Run the following command in the root of the repository to train:
 
 ```bash
@@ -63,7 +63,7 @@ python3 models/deep/unsupervised_image_bit.py
 
 ### Deep supervised hashing
 
-The default config for HashNet trains on Cifar-10 at 8-bits, this can be altered in "models/DSH/train.py".\
+The default config for DSH trains on Cifar-10 at 8-bits, this can be altered in "models/DSH/train.py".\
 Run the following command in the root of the repository to train:
 
 ```bash
