@@ -41,7 +41,7 @@ def get_config():
 
 
 class BiHalfModelUnsupervised(nn.Module):
-    def __init__(self, bit, is_mnist: bool):
+    def __init__(self, bit, is_mnist: bool, device=torch.device("cuda:0")):
         super(BiHalfModelUnsupervised, self).__init__()
         self.alexnet = models.alexnet(weights=AlexNet_Weights.IMAGENET1K_V1)
         self.alexnet.classifier = nn.Sequential(*list(self.alexnet.classifier.children())[:6])
@@ -53,6 +53,8 @@ class BiHalfModelUnsupervised(nn.Module):
             param.requires_grad = False
 
         self.fc_encode = nn.Linear(4096, bit)
+        self.to(device)
+        self.device = device
 
     class Hash(torch.autograd.Function):
         @staticmethod
@@ -88,6 +90,10 @@ class BiHalfModelUnsupervised(nn.Module):
             return loss
 
     def query_with_cuda_multi(self, images):
+        if self.device != "cuda:0":
+            self.device = torch.device("cuda:0")
+            self.to(self.device)
+
         self.eval()
         with torch.no_grad():  # Disable gradient calculation for inference
             images = images.to(torch.device("cuda:0"))  # Move the image to the specified device
@@ -95,13 +101,10 @@ class BiHalfModelUnsupervised(nn.Module):
             binary_hash_code = output.data.cpu().sign()  # Convert to binary hash code
         return binary_hash_code
 
-    def query_with_cuda(self, image):
-        return self.query_with_cuda_multi(image.unsqueeze(0))
-
-    def query_with_cpu(self, image):
+    def query(self, image):
         self.eval()
         with torch.no_grad():  # Disable gradient calculation for inference
-            image = image.to(torch.device("cuda:0"))  # Move the image to the specified device
+            image = image.to(self.device)  # Move the image to the specified device
             output = self(image.unsqueeze(0))  # Add batch dimension and pass through the network
             binary_hash_code = output.data.cpu().sign()  # Convert to binary hash code
         return binary_hash_code
@@ -111,7 +114,7 @@ def train_val(config, bit):
     device = config["device"]
     train_loader, test_loader, dataset_loader, num_train, num_test, num_dataset = get_data(config)
     config["num_train"] = num_train
-    net = config["net"](bit).to(device)
+    net = config["net"](bit, config["dataset"] == "mnist").to(device)
 
     optimizer = config["optimizer"]["type"](net.parameters(), **(config["optimizer"]["optim_params"]))
 
