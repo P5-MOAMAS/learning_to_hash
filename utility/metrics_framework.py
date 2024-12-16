@@ -289,6 +289,7 @@ def calculate_encoding_time(encode_length: int, data: FeatureLoader | Dataloader
         if query_cpu is not None:
             query_cpu(picture)
 
+    # Process all images with a transform and keep track of the processing time for it
     if trans is not None:
         pictures = []
         for i in trange(1000, desc="Preprocessing images"):
@@ -300,6 +301,7 @@ def calculate_encoding_time(encode_length: int, data: FeatureLoader | Dataloader
     else:
         pictures = data.data
 
+    # Query all images with a GPU function if specified and time it
     if query_gpu is not None:
         for i in trange(1000, desc="Calculating gpu times"):
             picture = pictures[i]
@@ -307,6 +309,7 @@ def calculate_encoding_time(encode_length: int, data: FeatureLoader | Dataloader
             query_gpu(picture)
             encoding_times_gpu.append(time.time_ns() - encoding_gpu_time_start)
 
+    # Query all images with a CPU function if specified and time it
     if query_cpu is not None:
         for i in trange(1000, desc="Calculating cpu times"):
             picture = pictures[i]
@@ -314,6 +317,7 @@ def calculate_encoding_time(encode_length: int, data: FeatureLoader | Dataloader
             query_cpu(picture)
             encoding_times_cpu.append(time.time_ns() - encoding_cpu_time_start)
 
+    # Calculate the average time used and convert it to milliseconds
     gpu_mean = np.mean(encoding_times_gpu) * math.pow(10, -6) if query_gpu is not None else 0
     cpu_mean = np.mean(encoding_times_cpu) * math.pow(10, -6) if query_cpu is not None else 0
     processing_mean = np.mean(processing_times) * math.pow(10, -6) if trans is not None else 0
