@@ -1,8 +1,10 @@
 import json
+import math
 import os
+import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Tuple, List
+from typing import Tuple, List, Dict
 
 import numpy as np
 import torch
@@ -257,10 +259,77 @@ class MetricsFramework:
         metrics["recall"] = avg_recall
 
         # Save the results to a json file for future use
-        os.makedirs("results", exist_ok=True)
-        results_file = "results/" + name + "_metrics.json"
-        print("Saving results to " + results_file)
-        with open(results_file, 'w') as f:
-            json.dump(metrics, f)
+        save_results(metrics, name + "_metrics")
 
         return metrics
+
+
+def save_results(data: Dict, name: str):
+    folders = name.split("/")
+    folders_string = "" if len(folders) > 1 else "/" + "/".join(folders[:-1])
+    os.makedirs("results" + folders_string, exist_ok=True)
+    results_file = "results/" + name + ".json"
+    print("Saving results to " + results_file)
+    with open(results_file, 'w') as f:
+        json.dump(data, f)
+
+
+def calculate_encoding_time(encode_length: int, data: FeatureLoader | Dataloader, trans: Compose = None,
+                            query_gpu: Callable = None,
+                            query_cpu: Callable = None):
+    encoding_times_gpu = []
+    processing_times = []
+    encoding_times_cpu = []
+
+    # Warmup so the results are more consistent
+    for i in range(100):
+        picture = data.data[1000 + i]
+        if trans is not None:
+            picture = trans(picture)
+        if query_gpu is not None:
+            query_gpu(picture)
+        if query_cpu is not None:
+            query_cpu(picture)
+
+    # Process all images with a transform and keep track of the processing time for it
+    if trans is not None:
+        pictures = []
+        for i in trange(1000, desc="Preprocessing images"):
+            picture = data.data[i]
+            processing_time_start = time.time_ns()
+            picture = trans(picture)
+            processing_times.append(time.time_ns() - processing_time_start)
+            pictures.append(picture)
+    else:
+        pictures = data.data
+
+    # Query all images with a GPU function if specified and time it
+    if query_gpu is not None:
+        for i in trange(1000, desc="Calculating gpu times"):
+            picture = pictures[i]
+            encoding_gpu_time_start = time.time_ns()
+            query_gpu(picture)
+            encoding_times_gpu.append(time.time_ns() - encoding_gpu_time_start)
+
+    # Query all images with a CPU function if specified and time it
+    if query_cpu is not None:
+        for i in trange(1000, desc="Calculating cpu times"):
+            picture = pictures[i]
+            encoding_cpu_time_start = time.time_ns()
+            query_cpu(picture)
+            encoding_times_cpu.append(time.time_ns() - encoding_cpu_time_start)
+
+    # Calculate the average time used and convert it to milliseconds
+    gpu_mean = np.mean(encoding_times_gpu) * math.pow(10, -6) if query_gpu is not None else 0
+    cpu_mean = np.mean(encoding_times_cpu) * math.pow(10, -6) if query_cpu is not None else 0
+    processing_mean = np.mean(processing_times) * math.pow(10, -6) if trans is not None else 0
+
+    print(
+        f"Encoding time at {encode_length} bits\n",
+        f"\tGPU: {gpu_mean}ms\n" if query_gpu is not None else "",
+        f"\tCPU: {cpu_mean}ms\n" if query_cpu is not None else "",
+        f"\tProcessing time: {processing_mean}ms\n"
+        f"Total time GPU: {gpu_mean + processing_mean}ms, CPU: {cpu_mean + processing_mean}\n" if trans is not None else "",
+    )
+
+    return gpu_mean, cpu_mean, processing_mean

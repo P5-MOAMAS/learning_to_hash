@@ -6,7 +6,7 @@ from torchvision.models import ResNet50_Weights as ResNet_Weights
 
 
 class AlexNet(nn.Module):
-    def __init__(self, hash_bit, is_mnist: bool = False):
+    def __init__(self, hash_bit, is_mnist: bool = False, device=torch.device("cuda:0")):
         super(AlexNet, self).__init__()
         self.is_mnist = is_mnist
         model_alexnet = models.alexnet(weights=AlexNet_Weights.IMAGENET1K_V1)
@@ -32,6 +32,8 @@ class AlexNet(nn.Module):
             nn.ReLU(inplace=True),
             nn.Linear(4096, hash_bit),
         )
+        self.to(device)
+        self.device = device
 
     def forward(self, x):
         x = self.features(x)
@@ -40,23 +42,25 @@ class AlexNet(nn.Module):
         return x
 
     def query_with_cuda_multi(self, images: torch.Tensor):
+        if self.device != "cuda:0":
+            self.device = torch.device("cuda:0")
+            self.to(self.device)
+
         if images.shape[0] == 1:
             images = images.squeeze(0)
+
         self.eval()
         with torch.no_grad():  # Disable gradient calculation for inference
-            images = images.to(torch.device("cuda:0"))  # Move the image to the specified device
+            images = images.to(self.device)  # Move the image to the specified device
             output = self(images)  # Pass through the network
             binary_hash_code = output.data.cpu().sign()  # Convert to binary hash code
         return binary_hash_code
 
-    def query_with_cuda(self, image: torch.Tensor):
-        return self.query_with_cuda_multi(image.unsqueeze(0))
-
-    def query_with_cpu(self, image):
+    def query_single(self, image: torch.Tensor):
         self.eval()
         with torch.no_grad():  # Disable gradient calculation for inference
-            image = image.to(torch.device("cuda:0"))  # Move the image to the specified device
-            output = self(image.unsqueeze(0))  # Add batch dimension and pass through the network
+            image = image.to(self.device)  # Move the image to the specified device
+            output = self(image.unsqueeze(0))  # Pass through the network
             binary_hash_code = output.data.cpu().sign()  # Convert to binary hash code
         return binary_hash_code
 
