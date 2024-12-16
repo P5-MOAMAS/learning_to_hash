@@ -2,8 +2,10 @@ import numpy as np
 import torch
 from sklearn.decomposition import PCA
 
+
 class Model:
     "Hashing model base."
+
     def __init__(self, encode_len):
         self.encode_len = encode_len
 
@@ -12,6 +14,7 @@ class Model:
 
     def encode(self, X):
         raise NotImplementedError
+
 
 def sign(X):
     """Sign function.
@@ -27,13 +30,14 @@ def sign(X):
     X_sign[X < 0] = -1
     return X_sign
 
+
 class ITQ(Model):
     """Iterative Quantization (ITQ) with PCA for dimension reduction."""
 
     def __init__(self, encode_len):
         super().__init__(encode_len)
 
-    def fit(self, X, n_iter=3):
+    def fit(self, X, n_iter=50):
         """Compute principal components and learn rotation matrix.
 
         # Parameters:
