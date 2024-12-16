@@ -105,7 +105,7 @@ class Encoder:
                 batch.append(self.transform_image(data[index]))
                 t.update(1)
 
-            code = self.alex_net(torch.stack(batch).squeeze(1))
+            code = self.alex_net(torch.stack(batch).squeeze(1).to(device))
             # Detach ensures the code doesn't linger in memory
             code = code.detach()
             codes.extend(code)
@@ -161,7 +161,7 @@ def load_data_set(dataset_name: str) -> NuswideMLoader | List[Any]:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Based Image Encoder')
-    parser.add_argument("-d", "--dataset", type=str, help="dataset to use (cifar-10), sets: cifar-10, mnist, image-net",
+    parser.add_argument("-d", "--dataset", type=str, help="dataset to use (cifar-10), sets: cifar-10, mnist, nuswide",
                         default="cifar-10")
     parser.add_argument("-e", "--extract_time", type=bool, default=False, help="Calculate the average time per image")
     parser.add_argument("-c", "--force-cpu", type=bool, default=False, help="Force CPU only")
