@@ -265,7 +265,9 @@ class MetricsFramework:
 
 
 def save_results(data: Dict, name: str):
-    os.makedirs("results", exist_ok=True)
+    folders = name.split("/")
+    folders_string = "" if len(folders) > 1 else "/" + "/".join(folders[:-1])
+    os.makedirs("results" + folders_string, exist_ok=True)
     results_file = "results/" + name + ".json"
     print("Saving results to " + results_file)
     with open(results_file, 'w') as f:
