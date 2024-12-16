@@ -19,5 +19,6 @@ dependencies = [
     "torchvision",
     "argparse",
     "tqdm",
-    "matplotlib"
+    "matplotlib",
+    "tensorboard"
 ]
