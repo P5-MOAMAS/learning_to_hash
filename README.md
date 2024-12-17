@@ -5,7 +5,7 @@ In the era of big data, efficient similarity search methods are crucial for mana
 
 This project explores and benchmarks various hashing techniques, including traditional methods Locality-Sensitive Hashing (LSH), Iterative Quantization (ITQ) and Spectral Hashing (SH), as well as advanced deep learning-based approaches such as Deep Supervised Hashing (DSH), HashNet, and Bi-half Net. Our work is grounded in an evaluation framework, leveraging datasets like MNIST, CIFAR-10, and NUS-WIDE to assess accuracy, scalability, and retrieval performance across methods and configurations.
 
-By analyzing the trade-offs between computational cost, memory efficiency, and retrieval accuracy, this project provides insights into the practical applications of learning-to-hash techniques for image retrieval and other similarity search tasks.
+By analyzing the trade-offs between computational cost and retrieval accuracy, this project provides insights into the practical applications of learning-to-hash techniques for image retrieval of large scale image databases. 
 
 The repository contains all the necessary resources, including pre-trained models, extracted features, and setup instructions.
 
