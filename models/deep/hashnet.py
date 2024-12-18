@@ -1,4 +1,4 @@
-import time
+import math
 
 import torch.optim as optim
 
@@ -23,15 +23,15 @@ def get_config():
         "crop_size": 224,
         "batch_size": 64,
         "net": AlexNet,
-        "dataset": "cifar10-1",
-        # "dataset": "nuswide_81_m",
+        # "dataset": "cifar10-1",
+        "dataset": "nuswide_81_m",
         # "dataset": "mnist",
         "epoch": 100,
         "test_map": 5,
         "save_path": "save/HashNet",
         # "device":torch.device("cpu"),
         "device": torch.device("cuda:0"),
-        "bit_list": [8],
+        "bit_list": [8, 16, 32, 64],
     }
     config = config_dataset(config)
     return config
@@ -66,13 +66,14 @@ def train_val(config, bit):
     device = config["device"]
     train_loader, test_loader, dataset_loader, num_train, num_test, num_dataset = get_data(config)
     config["num_train"] = num_train
-    net = config["net"](bit).to(device)
+    net = config["net"](bit, config["dataset"] == "mnist").to(device)
 
     optimizer = config["optimizer"]["type"](net.parameters(), **(config["optimizer"]["optim_params"]))
 
     criterion = HashNetLoss(config, bit)
 
     Best_mAP = 0
+    avg_epochs = []
 
     for epoch in range(config["epoch"]):
         criterion.scale = (epoch // config["step_continuation"] + 1) ** 0.5
@@ -83,6 +84,7 @@ def train_val(config, bit):
             config["info"], epoch + 1, config["epoch"], current_time, bit, config["dataset"], criterion.scale), end="")
 
         net.train()
+        epoch_times = []
 
         train_loss = 0
         for image, label, ind in train_loader:
@@ -97,18 +99,25 @@ def train_val(config, bit):
 
             loss.backward()
             optimizer.step()
-
+            epoch_times.append((time.time_ns() - net.start_time) * math.pow(10, -6))
+        avg_epochs.append(np.sum(epoch_times))
         train_loss = train_loss / len(train_loader)
 
         print("\b\b\b\b\b\b\b loss:%.3f" % (train_loss))
 
-        if (epoch + 1) % config["test_map"] == 0:
-            Best_mAP = validate(config, Best_mAP, test_loader, dataset_loader, net, bit, epoch, num_dataset)
+        # if (epoch + 1) % config["test_map"] == 0:
+        #     Best_mAP = validate(config, Best_mAP, test_loader, dataset_loader, net, bit, epoch, num_dataset)
+
+    print(f"Epochs: {avg_epochs}, Mean: {np.mean(avg_epochs)}ms")
+    return np.mean(avg_epochs)
 
 
 if __name__ == "__main__":
     config = get_config()
     print(config)
+    metrics = {}
     for bit in config["bit_list"]:
         config["pr_curve_path"] = f"log/alexnet/HashNet_{config['dataset']}_{bit}.json"
-        train_val(config, bit)
+        avg = train_val(config, bit)
+        metrics[bit] = avg if config["dataset"] != "nuswide_81_m" else avg / 2
+    print(metrics)
