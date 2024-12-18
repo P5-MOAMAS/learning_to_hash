@@ -1,3 +1,5 @@
+import time
+
 import torch
 import torch.nn as nn
 from torchvision import models
@@ -34,11 +36,13 @@ class AlexNet(nn.Module):
         )
         self.to(device)
         self.device = device
+        self.start_time = 0
 
     def forward(self, x):
         x = self.features(x)
         x = x.view(x.size(0), 256 * 6 * 6)
         x = self.hash_layer(x)
+        self.start_time = time.time_ns()
         return x
 
     def query_with_cuda_multi(self, images: torch.Tensor):
