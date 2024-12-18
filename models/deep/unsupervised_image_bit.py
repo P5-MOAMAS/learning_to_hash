@@ -1,8 +1,12 @@
-import time
+import math
+import os
+import sys
 
 import torch.nn.functional as F
 import torch.optim as optim
 
+if __name__ == "__main__":
+    sys.path.append(os.getcwd())
 from models.deep.deep_tools.network import *
 from models.deep.deep_tools.tools import *
 
@@ -26,14 +30,14 @@ def get_config():
         "batch_size": 64,
         "net": BiHalfModelUnsupervised,
         # "dataset": "mnist",
-        "dataset": "cifar10-1",
-        # "dataset": "nuswide_81_m",
+        # "dataset": "cifar10-1",
+        "dataset": "nuswide_81_m",
         "epoch": 100,
         "test_map": 5,
         "save_path": "save/BiHalf",
         # "device":torch.device("cpu"),
         "device": torch.device("cuda:0"),
-        "bit_list": [8],
+        "bit_list": [8, 16, 32, 64],
     }
     config = config_dataset(config)
 
@@ -57,6 +61,7 @@ class BiHalfModelUnsupervised(nn.Module):
         self.fc_encode = nn.Linear(4096, bit)
         self.to(device)
         self.device = device
+        self.start_time = 0
 
     class Hash(torch.autograd.Function):
         @staticmethod
@@ -80,6 +85,8 @@ class BiHalfModelUnsupervised(nn.Module):
         x = self.alexnet.features(x)
         x = x.view(x.size(0), -1)
         x = self.alexnet.classifier(x)
+
+        self.start_time = time.time_ns()
 
         h = self.fc_encode(x)
         if not self.training:
@@ -121,7 +128,7 @@ def train_val(config, bit):
     optimizer = config["optimizer"]["type"](net.parameters(), **(config["optimizer"]["optim_params"]))
 
     Best_mAP = 0
-
+    avg_epochs = []
     for epoch in range(config["epoch"]):
 
         lr = config["optimizer"]["optim_params"]["lr"] * (0.1 ** (epoch // config["optimizer"]["epoch_lr_decrease"]))
@@ -135,6 +142,7 @@ def train_val(config, bit):
 
         net.train()
 
+        epoch_times = []
         train_loss = 0
         for image, _, ind in train_loader:
             image = image.to(device)
@@ -147,6 +155,8 @@ def train_val(config, bit):
 
             loss.backward()
             optimizer.step()
+            epoch_times.append((time.time_ns() - net.start_time) * math.pow(10, -6))
+        avg_epochs.append(np.sum(epoch_times))
 
         train_loss = train_loss / len(train_loader)
 
@@ -155,9 +165,15 @@ def train_val(config, bit):
         if (epoch + 1) % config["test_map"] == 0:
             Best_mAP = validate(config, Best_mAP, test_loader, dataset_loader, net, bit, epoch, num_dataset)
 
+    print(f"Epochs: {avg_epochs}, Mean: {np.mean(avg_epochs)}ms")
+    return np.mean(avg_epochs)
+
 
 if __name__ == "__main__":
     config = get_config()
     print(config)
+    metrics = {}
     for bit in config["bit_list"]:
-        train_val(config, bit)
+        avg = train_val(config, bit)
+        metrics[bit] = avg if config["dataset"] != "nuswide_81_m" else avg / 2
+    print(metrics)
