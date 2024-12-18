@@ -42,20 +42,31 @@ def get_config():
     return config
 
 
+# Define DSH loss class
 class DSHLoss(torch.nn.Module):
     def __init__(self, config, bit):
         super(DSHLoss, self).__init__()
+
+        #Initialization
         self.m = 2 * bit
         self.U = torch.zeros(config["num_train"], bit).float().to(config["device"])
         self.Y = torch.zeros(config["num_train"], config["n_class"]).float().to(config["device"])
 
     def forward(self, u, y, ind, config):
+
+        #Updates tensor at the index ind with the value of u.data, which a hash code
         self.U[ind, :] = u.data
+
+        #Updates tensor at the index ind with the value of y.float(), which is the current label
         self.Y[ind, :] = y.float()
 
+        #Calculates the Euclidean distance between the hash code and the label
         dist = (u.unsqueeze(1) - self.U.unsqueeze(0)).pow(2).sum(dim=2)
+
+        #Calculates a binary similarity matrix based on the labels y
         y = (y @ self.Y.t() == 0).float()
 
+        #Calculates the loss based on distances and similiarity matrix
         loss = (1 - y) / 2 * dist + y / 2 * (self.m - dist).clamp(min=0)
         loss1 = loss.mean()
         loss2 = config["alpha"] * (1 - u.abs()).abs().mean()
@@ -64,6 +75,7 @@ class DSHLoss(torch.nn.Module):
 
 
 def train_val(config, bit):
+    #Initialization of training
     start_time = time.time()
     device = config["device"]
     train_loader, test_loader, dataset_loader, num_train, num_test, num_dataset = get_data(config)
@@ -72,6 +84,7 @@ def train_val(config, bit):
 
     optimizer = config["optimizer"]["type"](net.parameters(), **(config["optimizer"]["optim_params"]))
 
+    #Initialize a loss criterion
     criterion = DSHLoss(config, bit)
 
     Best_mAP = 0
@@ -84,24 +97,33 @@ def train_val(config, bit):
         print("%s[%2d/%2d][%s] bit:%d, dataset:%s, training...." % (
             config["info"], epoch + 1, config["epoch"], current_time, bit, config["dataset"]), end="")
 
+        #Set the network to training mode
         net.train()
         epoch_times = []
 
         train_loss = 0
         for image, label, ind in train_loader:
+            #Move the image and label to the specified device
             image = image.to(device)
             label = label.to(device)
 
+            #Clear the gradients
             optimizer.zero_grad()
+
+            #Pass the image through the network
             u = net(image)
 
+            #Calculate the loss
             loss = criterion(u, label.float(), ind, config)
             train_loss += loss.item()
 
+            #Backpropagate the loss
             loss.backward()
             optimizer.step()
             epoch_times.append((time.time_ns() - net.start_time) * math.pow(10, -6))
         avg_epochs.append(np.sum(epoch_times))
+
+        # Calculate the average loss
         train_loss = train_loss / len(train_loader)
 
         print("\b\b\b\b\b\b\b loss:%.3f" % (train_loss))
@@ -111,6 +133,7 @@ def train_val(config, bit):
         elapsed_time = f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
         print("Total time elapsed: " + elapsed_time)
 
+        #Validate the model
         if (epoch + 1) % config["test_map"] == 0:
             Best_mAP = validate(config, Best_mAP, test_loader, dataset_loader, net, bit, epoch, num_dataset)
     print(f"Epochs: {avg_epochs}, Mean: {np.mean(avg_epochs)}ms")

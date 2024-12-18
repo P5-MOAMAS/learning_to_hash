@@ -1,6 +1,14 @@
 # Learning to hash
 A semester project by group cs-24-dat-5-01 at Aalborg University.
 
+In the era of big data, efficient similarity search methods are crucial for managing and retrieving information from large-scale, high-dimensional datasets. Hashing-based methods, particularly learning-to-hash approaches, have emerged as powerful tools for encoding data into compact binary representations. These representations allow for fast and memory-efficient similarity comparisons in Hamming space.
+
+This project explores and benchmarks various hashing techniques, including traditional methods Locality-Sensitive Hashing (LSH), Iterative Quantization (ITQ) and Spectral Hashing (SH), as well as advanced deep learning-based approaches such as Deep Supervised Hashing (DSH), HashNet, and Bi-half Net. Our work is grounded in an evaluation framework, leveraging datasets like MNIST, CIFAR-10, and NUS-WIDE to assess accuracy, scalability, and retrieval performance across methods and configurations.
+
+By analyzing the trade-offs between computational cost and retrieval accuracy, this project provides insights into the practical applications of learning-to-hash techniques for image retrieval of large scale image databases. 
+
+The repository contains all the necessary resources, including pre-trained models, extracted features, and setup instructions.
+
 ## Setup environment
 
 Python version used [3.12.3 link](https://www.python.org/downloads/release/python-3123/)
@@ -54,7 +62,7 @@ pip install -e .
 
 ### Bihalf
 
-The default config for HashNet trains on Cifar-10 at 8-bits, this can be altered in "models/deep/unsupervised_image_bit.py".\
+The default config for Bihalf trains on Cifar-10 at 8-bits, this can be altered in "models/deep/unsupervised_image_bit.py".\
 Run the following command in the root of the repository to train:
 
 ```bash
@@ -63,7 +71,7 @@ python3 models/deep/unsupervised_image_bit.py
 
 ### Deep supervised hashing
 
-The default config for HashNet trains on Cifar-10 at 8-bits, this can be altered in "models/DSH/train.py".\
+The default config for DSH trains on Cifar-10 at 8-bits, this can be altered in "models/DSH/train.py".\
 Run the following command in the root of the repository to train:
 
 ```bash

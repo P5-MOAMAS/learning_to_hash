@@ -1,8 +1,8 @@
 import numpy as np
-import torch
 from sklearn.decomposition import PCA
-
-
+"""
+this Implementation uses a modified version of ITQ from https://github.com/wen-zhi/hashing 
+"""
 class Model:
     "Hashing model base."
 
@@ -43,7 +43,7 @@ class ITQ(Model):
         # Parameters:
             X: array, shape = (n_samples, n_features).
                 The training data.
-            n_iter: int (default=3).
+            n_iter: int (default=50).
                 Maximum number of iterations for ITQ.
         """
         self.n_iter = n_iter
@@ -67,10 +67,15 @@ class ITQ(Model):
         R = np.linalg.svd(R)[0]
 
         for _ in range(self.n_iter):
+            # Fix R and update B:
+            # shape: (n_samples, encode_len)
             Z = np.matmul(V, R)
             B = sign(Z)
+            # Fix B and update R:
+            # shape: (encode_len, encode_len)
             C = np.matmul(B.T, V)
             S, _, S_hat_T = np.linalg.svd(C)
+            # R = S_hat @ S.T = (S @ S_hat_T).T
             R = np.matmul(S, S_hat_T).T
         return R
 
@@ -90,45 +95,17 @@ class ITQ(Model):
         return B
 
     def encode_single(self, query_feature):
+        """Encode a single feature vector to binary code.
+
+        # Parameters:
+            query_feature: array, shape = (n_features,).
+            The single data point to encode.
+        # Returns:
+            B: array, shape = (1, encode_len).
+                Binary code of the input feature, with values 0 or 1.
+        """
         V = self._project(query_feature.reshape(1, -1))
         Z = np.matmul(V, self._R)
         B = sign(Z).astype(int)
         B[B == -1] = 0
         return B
-
-    def save_model(self, filename):
-        """Save the model parameters to a file."""
-        torch.save({
-            'rotation_matrix': self._R,
-            'encode_len': self.encode_len,
-            'pca_components': self.pca.components_,
-            'pca_mean': self.pca.mean_,
-            'pca_explained_variance': self.pca.explained_variance_,
-        }, filename)
-
-    def load_model(self, filename):
-        """Load model parameters from a file."""
-        checkpoint = torch.load(filename)
-        self._R = checkpoint['rotation_matrix']
-        self.encode_len = checkpoint['encode_len']
-        self.pca = PCA(n_components=self.encode_len)
-        self.pca.components_ = checkpoint['pca_components']
-        self.pca.mean_ = checkpoint['pca_mean']
-        self.pca.explained_variance_ = checkpoint['pca_explained_variance']
-        self._project = lambda X: self.pca.transform(X)
-
-    def query_image(self, features):
-        """Convert a query image to a binary tensor using ITQ.
-
-        # Parameters:
-            image: array, shape = (n_features,).
-                The query image features.
-        # Returns:
-            binary_tensor: torch.Tensor.
-                The binary tensor representation of the image.
-        """
-        if isinstance(features, torch.Tensor):
-            features = features.numpy()
-        binary_code = self.encode(features.reshape(1, -1))[0]
-        binary_tensor = torch.tensor((binary_code > 0).astype(int), dtype=torch.int32)
-        return binary_tensor
