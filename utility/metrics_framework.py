@@ -22,20 +22,21 @@ class Database:
 
 
 class MetricsFramework:
-    def __init__(self, query_func: Callable, data: Dataloader | FeatureLoader, query_size: int, trans: Compose = None,
+    def __init__(self, query_func: Callable, data: Dataloader | FeatureLoader, query_size: int, database_size: int = -1, trans: Compose = None,
                  multi_encoder: bool = False):
         self.query_func = query_func
 
         self.transform = trans
-        self.database = self.create_database(data, query_size, False, multi_encoder)
-        self.queries = self.create_database(data, query_size, True, multi_encoder)
+        database_size = len(data) if database_size == -1 else database_size
+        self.database = self.create_database(data, query_size, database_size, False, multi_encoder)
+        self.queries = self.create_database(data, query_size, database_size, True, multi_encoder)
 
     """
     Creates a database in format of the class Database, using the data given.
     Supports query functions that can encode multiple at once.
     """
 
-    def create_database(self, data: Dataloader | FeatureLoader, query_size: int, is_queries: bool,
+    def create_database(self, data: Dataloader | FeatureLoader, query_size: int, database_size: int, is_queries: bool,
                         use_multi: bool = False) -> Database:
         if not data:
             raise RuntimeError("Dataset is empty.")
@@ -44,9 +45,9 @@ class MetricsFramework:
 
         # Hashcode generation
         if use_multi:
-            codes = self.encode_multi(data, query_size, is_queries)
+            codes = self.encode_multi(data, query_size, database_size, is_queries)
         else:
-            codes = self.encode_single(data, query_size, is_queries)
+            codes = self.encode_single(data, query_size, database_size, is_queries)
 
         # Ensure the generated codes are using {0, 1} and isn't a 2d array
         for i in trange(len(codes)):
@@ -57,7 +58,7 @@ class MetricsFramework:
 
         # Label generation
         # Split the data into the correct chunk
-        labels = data.labels[:query_size] if is_queries else data.labels[query_size:]
+        labels = data.labels[:query_size] if is_queries else data.labels[query_size:database_size]
 
         # Create one hot label if label isn't already one-hot (Nuswide is already one hot)
         if isinstance(data.labels[0], np.ndarray) | isinstance(data.labels[0], list):
@@ -83,14 +84,14 @@ class MetricsFramework:
     Uses the query function to encode images into hash-codes in batches of 1500
     """
 
-    def encode_multi(self, data: Dataloader | FeatureLoader, query_size: int, is_queries: bool):
+    def encode_multi(self, data: Dataloader | FeatureLoader, query_size: int, database_size: int, is_queries: bool):
         batch_size = 1500
         codes = []
 
         # Process images in batches of 1500 as to not run out of memory
         print("Multi encoding is used, processing images in batches of", batch_size)
 
-        last_index, first_index = (query_size, 0) if is_queries else (len(data), query_size)
+        last_index, first_index = (query_size, 0) if is_queries else (database_size, query_size)
         data_range = range(first_index, last_index, batch_size)
 
         for i in tqdm(data_range, desc="Encoding images"):
@@ -112,9 +113,9 @@ class MetricsFramework:
     Uses the query function to encode images one at a time
     """
 
-    def encode_single(self, data: Dataloader | FeatureLoader, query_size: int, is_queries: bool):
+    def encode_single(self, data: Dataloader | FeatureLoader, query_size: int, database_size: int, is_queries: bool):
         codes = []
-        data_range = range(0, query_size) if is_queries else range(query_size, len(data))
+        data_range = range(0, query_size) if is_queries else range(query_size, database_size)
         for i in tqdm(data_range, desc="Encoding images"):
             feature = data[i]
             if self.transform is not None:
