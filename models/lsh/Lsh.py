@@ -42,6 +42,7 @@ class LSH:
         Returns:
             function: A hash function that takes an input vector x and returns 0 or 1.
         """
+        #Creates the random hash functions
         random_vector = np.random.randn(self.reduced_data.shape[1])
         return lambda x: int(np.dot(x, random_vector) > 0)
 
