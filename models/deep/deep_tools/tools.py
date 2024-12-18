@@ -1,13 +1,15 @@
+import json
+import os
 
 import numpy as np
-import torch.utils.data as util_data
-from torchvision import transforms
 import torch
-from PIL import Image
-from tqdm import tqdm
+import torch.utils.data as util_data
 import torchvision.datasets as dsets
-import os
-import json
+from PIL import Image
+from torchvision import transforms
+from tqdm import tqdm
+
+
 def config_dataset(config):
     if "cifar" in config["dataset"]:
         config["topK"] = -1
@@ -38,16 +40,17 @@ def config_dataset(config):
     if config["dataset"] == "nuswide_21":
         config["data_path"] = "/dataset/NUS-WIDE/"
     if config["dataset"] in ["nuswide_21_m", "nuswide_81_m"]:
-        config["data_path"] = "/dataset/nus_wide_m/"
+        config["data_path"] = "data/nuswide_81_m/"
     if config["dataset"] == "coco":
         config["data_path"] = "/dataset/COCO_2014/"
     if config["dataset"] == "voc2012":
         config["data_path"] = "/dataset/"
     config["data"] = {
-        "train_set": {"list_path": "learning_to_hash/models/deep/data/" + config["dataset"] + "/train.txt", "batch_size": config["batch_size"]},
-        "database": {"list_path": "learning_to_hash/models/deep/data/" + config["dataset"] + "/database.txt", "batch_size": config["batch_size"]},
-        "test": {"list_path": "learning_to_hash/models/deep/data/" + config["dataset"] + "/test.txt", "batch_size": config["batch_size"]}}
+        "train_set": {"list_path": "data/" + config["dataset"] + "/train.txt", "batch_size": config["batch_size"]},
+        "database": {"list_path": "data/" + config["dataset"] + "/database.txt", "batch_size": config["batch_size"]},
+        "test": {"list_path": "data/" + config["dataset"] + "/test.txt", "batch_size": config["batch_size"]}}
     return config
+
 
 class ImageList(object):
 
@@ -85,7 +88,8 @@ class MyCIFAR10(dsets.CIFAR10):
         img = self.transform(img)
         target = np.eye(10, dtype=np.int8)[np.array(target)]
         return img, target, index
-    
+
+
 class MyMNIST(dsets.MNIST):
     def __getitem__(self, index):
         img, target = self.data[index], self.targets[index]
@@ -183,8 +187,9 @@ def cifar_dataset(config):
                                                   num_workers=4)
 
     return train_loader, test_loader, database_loader, \
-           train_index.shape[0], test_index.shape[0], database_index.shape[0]
-           
+        train_index.shape[0], test_index.shape[0], database_index.shape[0]
+
+
 def mnist_dataset(config):
     batch_size = config["batch_size"]
 
@@ -199,17 +204,17 @@ def mnist_dataset(config):
     mnist_dataset_root = '/dataset/mnist/'
     # Dataset
     train_dataset = MyMNIST(root=mnist_dataset_root,
-                              train=True,
-                              transform=transform,
-                              download=True)
+                            train=True,
+                            transform=transform,
+                            download=True)
 
     test_dataset = MyMNIST(root=mnist_dataset_root,
-                             train=False,
-                             transform=transform)
+                           train=False,
+                           transform=transform)
 
     database_dataset = MyMNIST(root=mnist_dataset_root,
-                                 train=False,
-                                 transform=transform)
+                               train=False,
+                               transform=transform)
 
     X = np.concatenate((train_dataset.data, test_dataset.data))
     L = np.concatenate((np.array(train_dataset.targets), np.array(test_dataset.targets)))
@@ -263,7 +268,8 @@ def mnist_dataset(config):
                                                   num_workers=4)
 
     return train_loader, test_loader, database_loader, \
-           train_index.shape[0], test_index.shape[0], database_index.shape[0]
+        train_index.shape[0], test_index.shape[0], database_index.shape[0]
+
 
 def get_data(config):
     if "cifar" in config["dataset"]:
@@ -282,10 +288,10 @@ def get_data(config):
         print(data_set, len(dsets[data_set]))
         dset_loaders[data_set] = util_data.DataLoader(dsets[data_set],
                                                       batch_size=data_config[data_set]["batch_size"],
-                                                      shuffle= (data_set == "train_set") , num_workers=4)
+                                                      shuffle=(data_set == "train_set"), num_workers=4)
 
     return dset_loaders["train_set"], dset_loaders["test"], dset_loaders["database"], \
-           len(dsets["train_set"]), len(dsets["test"]), len(dsets["database"])
+        len(dsets["train_set"]), len(dsets["test"]), len(dsets["database"])
 
 
 def compute_result(dataloader, net, device):
@@ -368,6 +374,7 @@ def CalcTopMapWithPR(qB, queryL, rB, retrievalL, topk):
 
     return topkmap, cum_prec, cum_recall
 
+
 # https://github.com/chrisbyd/DeepHash-pytorch/blob/master/validate.py
 def validate(config, Best_mAP, test_loader, dataset_loader, net, bit, epoch, num_dataset):
     device = config["device"]
@@ -377,7 +384,7 @@ def validate(config, Best_mAP, test_loader, dataset_loader, net, bit, epoch, num
     # print("calculating dataset binary code.......")
     trn_binary, trn_label = compute_result(dataset_loader, net, device=device)
 
-    if "pr_curve_path" not in  config:
+    if "pr_curve_path" not in config:
         mAP = CalcTopMap(trn_binary.numpy(), tst_binary.numpy(), trn_label.numpy(), tst_label.numpy(), config["topK"])
     else:
         # need more memory
