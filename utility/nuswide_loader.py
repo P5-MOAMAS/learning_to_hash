@@ -4,7 +4,7 @@ from PIL import Image
 
 class NuswideMLoader:
     def __init__(self):
-        self.data_root = "data/nus_wide_m/"
+        self.data_root = "data/nuswide_81_m/"
         self.data = []
         self.labels = []
         self.get_data()
