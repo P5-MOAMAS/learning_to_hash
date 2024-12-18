@@ -26,7 +26,7 @@ def get_config():
         "dataset": "cifar10-1",
         # "dataset": "nuswide_81_m",
         # "dataset": "mnist",
-        "epoch": 100,
+        "epoch": 50,
         "test_map": 5,
         "save_path": "save/HashNet",
         # "device":torch.device("cpu"),
@@ -43,26 +43,47 @@ class HashNetLoss(torch.nn.Module):
         self.scale = 1
 
     def forward(self, u, y, ind, config):
+        # Applies hyperbolic tangent to u, resulting in values between -1 and 1
         u = torch.tanh(self.scale * u)
+        
+        # Calculates the similarity matrix
         S = (y @ y.t() > 0).float()
+        
+        # Calculates the dot product of u and its transpose
         sigmoid_alpha = config["alpha"]
         dot_product = sigmoid_alpha * u @ u.t()
+        
+        # Creates a mask for the positive values of S, this identifies the positive pairs based on S
         mask_positive = S > 0
+        
+        # Creates a mask for the negative values of S, this identifies the negative pairs based on S
         mask_negative = (1 - S).bool()
 
+        # Calculates the negative log probabilities for each pair of samples
         neg_log_probe = dot_product + torch.log(1 + torch.exp(-dot_product)) - S * dot_product
+        
+        # Calculates the total number of positive pairs
         S1 = torch.sum(mask_positive.float())
+        
+        # Calculates the total number of negative pairs
         S0 = torch.sum(mask_negative.float())
+        
+        # Calculates the total number of pairs
         S = S0 + S1
 
+        # Adjusting the negative log probabilities based on the number of positive pairs, so that the contribution of positive pairs to the loss is weighted appropriately
         neg_log_probe[mask_positive] = neg_log_probe[mask_positive] * S / S1
+        
+        # Adjusting the negative log probabilities based on the number of negative pairs, so that the contribution of negative pairs to the loss is weighted appropriately
         neg_log_probe[mask_negative] = neg_log_probe[mask_negative] * S / S0
 
+        # Calculates the loss
         loss = torch.sum(neg_log_probe) / S
         return loss
 
 
 def train_val(config, bit):
+    # Initialization of training
     device = config["device"]
     train_loader, test_loader, dataset_loader, num_train, num_test, num_dataset = get_data(config)
     config["num_train"] = num_train
@@ -70,6 +91,7 @@ def train_val(config, bit):
 
     optimizer = config["optimizer"]["type"](net.parameters(), **(config["optimizer"]["optim_params"]))
 
+    # Initialize a loss criterion
     criterion = HashNetLoss(config, bit)
 
     Best_mAP = 0
@@ -82,22 +104,30 @@ def train_val(config, bit):
         print("%s[%2d/%2d][%s] bit:%d, dataset:%s, scale:%.3f, training...." % (
             config["info"], epoch + 1, config["epoch"], current_time, bit, config["dataset"], criterion.scale), end="")
 
+        # Set the network to training mode
         net.train()
 
         train_loss = 0
         for image, label, ind in train_loader:
+            # Move the image and label to the specified device
             image = image.to(device)
             label = label.to(device)
 
+            # Clear the gradients
             optimizer.zero_grad()
+            
+            # Pass the image through the network
             u = net(image)
 
+            # Calculate the loss
             loss = criterion(u, label.float(), ind, config)
             train_loss += loss.item()
 
+            # Backpropagate the loss
             loss.backward()
             optimizer.step()
 
+        # Calculate the average loss
         train_loss = train_loss / len(train_loader)
 
         print("\b\b\b\b\b\b\b loss:%.3f" % (train_loss))
