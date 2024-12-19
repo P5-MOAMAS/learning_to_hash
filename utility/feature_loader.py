@@ -47,6 +47,7 @@ class FeatureLoader:
                 print(f"File {name} not found!")
                 sys.exit(1)
 
+            # Convert data to np array
             data = [np.array(i) for i in data]
 
             if data is None:
@@ -68,10 +69,12 @@ class FeatureLoader:
             transform=ToTensor(),
         )
 
+        # Get all features from all images in MNIST
         image_labels = []
         for labels in mnist.targets.numpy():
             image_labels.append(labels)
 
+        # Get all labels in MNIST
         image_features = self.load_features()
         del mnist
         return image_features, image_labels

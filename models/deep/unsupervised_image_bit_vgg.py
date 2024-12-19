@@ -49,7 +49,7 @@ def get_config():
 class BiHalfModelUnsupervised(nn.Module):
     def __init__(self, bit, is_mnist: bool, device=torch.device("cuda:0")):
         super(BiHalfModelUnsupervised, self).__init__()
-        # Initializes the alexnet model
+        #Initializes the vgg model
         self.vgg = models.vgg16(weights=models.VGG16_Weights.IMAGENET1K_V1)
         self.vgg.classifier = nn.Sequential(*list(self.vgg.classifier.children())[:6])
 

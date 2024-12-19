@@ -64,6 +64,9 @@ class Encoder:
         self.alex_net = AlexNet(512, device)
         self.start_time = 0
 
+    """
+    Transforms an image into the correct size and into a tensor
+    """
     @staticmethod
     def transform_image(image):
         trans = transforms.Compose([
@@ -74,6 +77,9 @@ class Encoder:
         ])
         return trans(image).unsqueeze(0)
 
+    """
+    Prints the current elapsed time
+    """
     def print_elapsed_time(self):
         minutes, seconds = divmod(time.time() - self.start_time, 60)
         hours, minutes = divmod(minutes, 60)
@@ -81,6 +87,9 @@ class Encoder:
 
         print("Total time elapsed: " + elapsed_time)
 
+    """
+    Saves the features to file
+    """
     def save_to_file(self, codes: List[tensor], dataset_batch: int):
         os.makedirs("features", exist_ok=True)
         file = "features/" + str(self.dataset_name) + "-" + str(dataset_batch) + "-features"
@@ -88,24 +97,33 @@ class Encoder:
         torch.save(codes, file)
         print("Features successfully saved!\n")
 
+
+    """
+    Encodes the entire dataset into feature vectors
+    """
     def encode(self):
         data = load_data_set(self.dataset_name)
         self.start_time = time.time()
 
         batch_size = 1000
         codes = []
+
+        # Go through all images in batches
         t = tqdm(range(0, len(data)), desc="Encoding images")
         for i in range(0, len(data), batch_size):
             batch_end = i + batch_size
             if batch_end >= len(data):
                 batch_end = len(data)
 
+            # Transform all images to the correct format for the entire batch
             batch = []
             for index in range(i, batch_end):
                 batch.append(self.transform_image(data[index]))
                 t.update(1)
 
+            # Turn into tensor of tensors and run it through AlexNet
             code = self.alex_net(torch.stack(batch).squeeze(1).to(device))
+
             # Detach ensures the code doesn't linger in memory
             code = code.detach()
             codes.extend(code)
@@ -116,21 +134,27 @@ class Encoder:
 
         del codes
 
+    """
+    Calculate extraction time for a 1000 queries to get an average per image
+    """
     def calculate_extraction_time(self):
         data = load_data_set(self.dataset_name)
 
         encoding_times = []
         processing_times = []
         for i in trange(1000, desc="Calculating extraction time"):
+            # Calculate the time to transform images
             processing_time_start = time.time_ns()
             picture = self.transform_image(data[i])
             picture = picture.to(self.alex_net.device)
             processing_times.append(time.time_ns() - processing_time_start)
 
+            # Calculate the encoding time for an image
             encoding_time_start = time.time_ns()
             self.alex_net(picture)
             encoding_times.append(time.time_ns() - encoding_time_start)
 
+        # Calculate the mean encoding time and processing time
         mean_time = np.mean(encoding_times) * math.pow(10, -6)
         mean_processing_time = np.mean(processing_times) * math.pow(10, -6)
 
@@ -153,6 +177,7 @@ def load_data_set(dataset_name: str) -> NuswideMLoader | List[Any]:
             sys.exit(1)
 
     image_data = []
+    # Go through all images and convert them to Pillow Images
     for image in data:
         image_data.append(functional.to_pil_image(image).convert("RGB"))
 
