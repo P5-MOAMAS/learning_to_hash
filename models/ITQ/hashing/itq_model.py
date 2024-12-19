@@ -1,8 +1,6 @@
 import numpy as np
 from sklearn.decomposition import PCA
-"""
-this Implementation uses a modified version of ITQ from https://github.com/wen-zhi/hashing 
-"""
+
 class Model:
     "Hashing model base."
     def __init__(self, encode_len):
