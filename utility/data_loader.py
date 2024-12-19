@@ -14,6 +14,7 @@ class Dataloader:
         self.data = None
 
         self.dataset_name = dataset_name
+        # Set the loading function for the corresponding dataset
         match dataset_name:
             case "cifar-10":
                 self.load_func = self.__init_cifar__
@@ -36,6 +37,9 @@ class Dataloader:
         loader = NuswideMLoader()
         return loader, loader.labels
 
+    """
+    Used to load MNIST Dataset
+    """
     @staticmethod
     def __init_mnist__():
         mnist = datasets.MNIST(
@@ -45,30 +49,40 @@ class Dataloader:
             transform=ToTensor()
         )
 
+        # Load all labels
         image_labels = []
         for labels in mnist.targets.numpy():
             image_labels.append(labels)
 
+        # Load all images and convert them to Pillow Images
         image_data = []
         for image in mnist.data.numpy():
             image_data.append(functional.to_pil_image(image))
 
         return image_data, image_labels
 
+    """
+    Used to load Cifar-10
+    """
     @staticmethod
     def __init_cifar__():
         cifar = datasets.CIFAR10(root="data", train=True, download=True)
 
+        # Load all labels
         image_labels = []
         for labels in cifar.targets:
             image_labels.append(labels)
 
+        # Load all images and convert them to Pillow Images
         image_data = []
         for image in cifar.data:
             image_data.append(functional.to_pil_image(image).convert("RGB"))
 
         return image_data, image_labels
 
+    """
+    Loads a dataset using the given load function
+    """
     def load_data_set(self):
         image_data, image_labels = self.load_func()
 

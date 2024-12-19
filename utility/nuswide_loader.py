@@ -9,11 +9,17 @@ class NuswideMLoader:
         self.labels = []
         self.get_data()
 
+
+    """
+    Loads the Nuswide path and label file
+    """
     def load_image_paths(self, path: str):
         data = []
         labels = []
+        # Load the file
         image_list = open(path).readlines()
         for val in image_list:
+            # Get the path from the first "word" in the list
             path = self.data_root + val.split()[0]
             # Labels are everything after the first "word"
             image_labels = np.array([int(label) for label in val.split()[1:]])
@@ -22,6 +28,9 @@ class NuswideMLoader:
 
         return data, labels
 
+    """
+    Prepare the data paths and labels for train, database and test
+    """
     def get_data(self):
         dataset_paths = [
             self.data_root + "train.txt",
@@ -29,6 +38,7 @@ class NuswideMLoader:
             self.data_root + "test.txt"
         ]
 
+        # Load All data paths and labels
         for path in dataset_paths:
             data, labels = self.load_image_paths(path)
             self.data.extend(data)
